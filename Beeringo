@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BEERINGO — Cerveza artesanal con alma de viringo</title>
+    
+    <!-- CDN de Tailwind CSS para el procesamiento dinámico de estilos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Importando la tipografía corporativa Roboto Slab desde Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Kit de Iconos de FontAwesome para elementos visuales fluidos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Hojas de estilo y scripts de Leaflet.js para mapas georreferenciados -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bb: {
+                            red: '#DF9F28',       // Amarillo Mostaza / Oro Cálido (Color principal de acción)
+                            yellow: '#DF9F28',    // Oro Cálido secundario
+                            cream: '#F5F5F3',     // Blanco Roto / Crema Claro (Fondo principal)
+                            dark: '#1A1A1A',      // Negro Carbón / Gris Oscuro (Texto y contrastes primarios)
+                            shadow: '#2C2C2A',    // Color de sombras y textos secundarios
+                            card: '#FFFFFF',      // Fondo de las tarjetas de catálogo
+                            gray: '#EAEAEA'       // Separadores y bordes estructurales
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Roboto Slab"', 'serif'],
+                        brand: ['"Roboto Slab"', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Ajuste de prioridad para el contenedor de mapas Leaflet */
+        .leaflet-container {
+            z-index: 10 !important;
+        }
+    </style>
+
+    <script>
+        window.bigBiteApp = function() {
+            return {
+                selectedCategory: 'todas',
+                searchTerm: '',
+                cart: [],
+                isCartOpen: false,
+                currentStep: 'cart', // 'cart' o 'checkout'
+                errorMessage: '',
+                floatingNotification: '',
+                isLoadingMenu: true,
+                
+                // Configuración del Horario Activo: Todos los días
+                activeSchedule: 'TODOS', 
+                isOpen: false,
+
+                // Detalle del Producto Ampliado y Selector de cantidad previo
+                isDetailOpen: false,
+                selectedProductForDetail: null,
+                modalQuantity: 1,
+                detailCreamsSelections: [ [] ], // Guarda la selección de salsas individual por cada unidad de snack pedida
+
+                // Formulario de Checkout
+                checkoutName: '',
+                checkoutPhone: '',
+                checkoutDeliveryType: 'delivery',
+                checkoutAddress: '',
+                checkoutReference: '',
+                checkoutNotes: '',
+                gpsCoords: '',
+                
+                // Métodos de Pago personalizados para el cliente
+                checkoutPaymentMethod: 'yape', // 'yape' (Pago Móvil) o 'cash'
+                cashAmountToPay: '', // Monto ingresado con el que pagará
+
+                // Sistema de Cotización por Distancia GPS desde base de despacho
+                deliveryDistance: 0,
+                deliveryCost: 0,
+                isOutOfRange: false,
+                // Coordenadas exactas proporcionadas para Condominios Parque Santa Margarita
+                restaurantCoords: { lat: -5.167472, lng: -80.661306 }, 
+
+                // Sistema de persistencia local (LocalStorage)
+                saveUserData: false,
+                
+                // Leaflet Map State
+                map: null,
+                marker: null,
+
+                // Logo dinámico inicial del cliente
+                logoUrl: 'https://i.ibb.co/vCzgG0Y3/photo-5053215447259482904-w.jpg',
+
+                // Categorías de catálogo solicitadas por el cliente
+                categories: [
+                    { id: 'cervezas', name: '🍺 Cervezas' },
+                    { id: 'snacks', name: '🍟 Snacks' }
+                ],
+
+                // Productos estrella cargados localmente (Fallback robusto garantizado)
+                products: [
+                    { 
+                        id: 'pale-ale', 
+                        name: 'Beeringo Pale Ale', 
+                        description: 'Refrescante, ligera, cítrica (5% de alcohol). El alma del viringo en cada sorbo.', 
+                        category: 'cervezas', 
+                        price: 12.0,
+                        image: 'https://i.ibb.co/NgW8z77t/PALE-ALE.png'
+                    },
+                    { 
+                        id: 'red-ale', 
+                        name: 'Beeringo Red Ale', 
+                        description: 'Maltosa, con matices acaramelados (6.5% de alcohol). Perfecta consistencia y aroma artesanal.', 
+                        category: 'cervezas', 
+                        price: 13.0,
+                        image: 'https://i.ibb.co/W41tzqGp/RED-ALE.png'
+                    },
+                    { 
+                        id: 'papas-snacks', 
+                        name: 'Papas Artesanales Crujientes', 
+                        description: 'Papas nativas seleccionadas, doradas a la perfección con sal marina y finas hierbas. El maridaje ideal.', 
+                        category: 'snacks', 
+                        price: 10.0,
+                        image: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=500&q=80'
+                    },
+                    { 
+                        id: 'crema-mayo', 
+                        name: 'Mayonesa de la Casa con Malta', 
+                        description: 'Mayonesa premium hecha artesanalmente con toques de ajo y emulsión de malta.', 
+                        category: 'cremas', 
+                        price: 0.0,
+                        image: 'https://images.unsplash.com/photo-1571115177098-24ec4209b50e?auto=format&fit=crop&w=500&q=80'
+                    },
+                    { 
+                        id: 'crema-aji', 
+                        name: 'Ají Pollero de la Casa', 
+                        description: 'Picante medio, elaborado con ají amarillo piurano y la receta secreta de La casa.', 
+                        category: 'cremas', 
+                        price: 0.0,
+                        image: 'https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?auto=format&fit=crop&w=500&q=80'
+                    }
+                ],
+
+                initData() {
+                    const savedData = localStorage.getItem('beeringo_saved_profile');
+                    if (savedData) {
+                        try {
+                            const parsed = JSON.parse(savedData);
+                            this.checkoutName = parsed.name || '';
+                            this.checkoutPhone = parsed.phone || '';
+                            this.checkoutDeliveryType = parsed.deliveryType || 'delivery';
+                            this.checkoutAddress = parsed.address || '';
+                            this.checkoutReference = parsed.reference || '';
+                            this.gpsCoords = parsed.gpsCoords || '';
+                            this.saveUserData = true;
+                        } catch (e) {
+                            console.error("Error al cargar perfil guardado", e);
+                        }
+                    }
+                    this.fetchMenu();
+                    
+                    // Comprobar estado abierto/cerrado cada 30 segundos en tiempo real
+                    this.updateOpenStatus();
+                    setInterval(() => {
+                        this.updateOpenStatus();
+                    }, 30000);
+
+                    // Observadores de AlpineJS para autoguardar cambios en el formulario
+                    this.$watch('saveUserData', () => this.saveProfileToLocalStorage());
+                    this.$watch('checkoutName', () => this.saveProfileToLocalStorage());
+                    this.$watch('checkoutPhone', () => this.saveProfileToLocalStorage());
+                    this.$watch('checkoutDeliveryType', () => this.saveProfileToLocalStorage());
+                    this.$watch('checkoutAddress', () => this.saveProfileToLocalStorage());
+                    this.$watch('checkoutReference', () => this.saveProfileToLocalStorage());
+                    this.$watch('gpsCoords', () => this.saveProfileToLocalStorage());
+                },
+
+                saveProfileToLocalStorage() {
+                    if (this.saveUserData) {
+                        const profile = {
+                            name: this.checkoutName.trim(),
+                            phone: this.checkoutPhone.trim(),
+                            deliveryType: this.checkoutDeliveryType,
+                            address: this.checkoutAddress.trim(),
+                            reference: this.checkoutReference.trim(),
+                            gpsCoords: this.gpsCoords
+                        };
+                        localStorage.setItem('beeringo_saved_profile', JSON.stringify(profile));
+                    } else {
+                        localStorage.removeItem('beeringo_saved_profile');
+                    }
+                },
+
+                updateOpenStatus() {
+                    const now = new Date();
+                    const peruString = now.toLocaleString("en-US", { timeZone: "America/Lima" });
+                    const peruDate = new Date(peruString);
+                    
+                    const hours = peruDate.getHours();
+                    const minutes = peruDate.getMinutes();
+                    const currentTimeInMinutes = hours * 60 + minutes;
+
+                    // Horario establecido por BEERINGO: 11:00 am a 11:00 pm (Todos los días)
+                    const openingTime = 11 * 60; 
+                    const closingTime = 23 * 60;      
+
+                    const isTimeValid = currentTimeInMinutes >= openingTime && currentTimeInMinutes < closingTime;
+
+                    const activeUpper = this.activeSchedule ? this.activeSchedule.toUpperCase().trim() : '';
+
+                    if (['TEST', 'TESTING', 'PRUEBAS', 'SIEMPRE'].includes(activeUpper)) {
+                        this.isOpen = true;
+                    } else {
+                        // Venta activa todos los días de la semana
+                        this.isOpen = isTimeValid;
+                    }
+                },
+
+                calculateDistance(lat1, lon1, lat2, lon2) {
+                    const R = 6371; // Radio de la Tierra en kilómetros
+                    const dLat = (lat2 - lat1) * Math.PI / 180;
+                    const dLon = (lon2 - lon1) * Math.PI / 180;
+                    const a = 
+                        Math.sin(dLat/2) * Math.sin(dLat/2) +
+                        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                    return R * c;
+                },
+
+                onMarkerMove(lat, lng) {
+                    this.gpsCoords = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                    
+                    const dist = this.calculateDistance(
+                        this.restaurantCoords.lat, 
+                        this.restaurantCoords.lng, 
+                        lat, 
+                        lng
+                    );
+                    
+                    this.deliveryDistance = dist;
+                    this.updateDeliveryCost(dist);
+                },
+
+                updateDeliveryCost(dist) {
+                    // Costos estimados según distancias acordadas por el cliente (Límite 9km)
+                    if (dist < 1.0) {
+                        this.deliveryCost = 3.0;   // Menor a 1km = S/ 3
+                        this.isOutOfRange = false;
+                    } else if (dist >= 1.0 && dist <= 3.0) {
+                        this.deliveryCost = 6.0;   // 1 a 3km = S/ 6
+                        this.isOutOfRange = false;
+                    } else if (dist > 3.0 && dist <= 6.0) {
+                        this.deliveryCost = 9.0;   // 3 a 6km = S/ 9
+                        this.isOutOfRange = false;
+                    } else if (dist > 6.0 && dist <= 9.0) {
+                        this.deliveryCost = 13.0;  // 6 a 9km = S/ 13
+                        this.isOutOfRange = false;
+                    } else {
+                        this.deliveryCost = 0;
+                        this.isOutOfRange = true; // Supera el límite de reparto de 9 km
+                    }
+                },
+
+                getCurrentLocationGPS() {
+                    if (!navigator.geolocation) {
+                        this.triggerNotification("❌ Tu navegador no soporta geolocalización.");
+                        return;
+                    }
+                    this.triggerNotification("⏳ Conectando con el GPS...");
+                    
+                    navigator.geolocation.getCurrentPosition(
+                        async (position) => {
+                            const lat = position.coords.latitude;
+                            const lng = position.coords.longitude;
+                            const accuracy = position.coords.accuracy;
+
+                            const dist = this.calculateDistance(
+                                this.restaurantCoords.lat, 
+                                this.restaurantCoords.lng, 
+                                lat, 
+                                lng
+                            );
+
+                            if (dist > 15.0 || accuracy > 1000) {
+                                // Coordenadas seguras del local de despacho base si el cálculo IP es erróneo
+                                const fallbackLat = this.restaurantCoords.lat;
+                                const fallbackLng = this.restaurantCoords.lng;
+                                if (this.map) {
+                                    this.map.setView([fallbackLat, fallbackLng], 16);
+                                }
+                                if (this.marker) {
+                                    this.marker.setLatLng([fallbackLat, fallbackLng]);
+                                }
+                                this.onMarkerMove(fallbackLat, fallbackLng);
+                                this.reverseGeocode(fallbackLat, fallbackLng);
+                                this.triggerNotification("💻 Ubicación remota detectada. Te ubicamos cerca a Condominios Parque Santa Margarita para ajustar.");
+                            } else {
+                                if (this.map) {
+                                    this.map.setView([lat, lng], 16);
+                                }
+                                if (this.marker) {
+                                    this.marker.setLatLng([lat, lng]);
+                                }
+                                this.onMarkerMove(lat, lng);
+                                this.reverseGeocode(lat, lng);
+                                this.triggerNotification("✅ Ubicación GPS fijada correctamente.");
+                            }
+                        },
+                        (error) => {
+                            console.error(error);
+                            this.triggerNotification("❌ Activa tus permisos de ubicación para continuar.");
+                        },
+                        { enableHighAccuracy: true, timeout: 10000 }
+                    );
+                },
+
+                async reverseGeocode(lat, lng) {
+                    try {
+                        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
+                            headers: { 'Accept-Language': 'es' }
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data && data.address) {
+                                const addr = data.address;
+                                const addressParts = [];
+                                if (addr.road) addressParts.push(addr.road);
+                                if (addr.house_number) addressParts.push(addr.house_number);
+                                if (addr.suburb) addressParts.push(addr.suburb);
+                                if (addr.neighbourhood && !addr.suburb) addressParts.push(addr.neighbourhood);
+                                if (addr.city_district) addressParts.push(addr.city_district);
+                                
+                                this.checkoutAddress = addressParts.length > 0 
+                                    ? addressParts.join(', ') 
+                                    : data.display_name.split(',').slice(0, 3).join(',').trim();
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Error en Reverse Geocoding:", e);
+                    }
+                },
+
+                async geocodeAddress() {
+                    if (!this.checkoutAddress.trim()) {
+                        this.triggerNotification("⚠️ Escribe una dirección para buscarla.");
+                        return;
+                    }
+                    this.triggerNotification("⏳ Buscando dirección en el mapa...");
+                    try {
+                        const query = encodeURIComponent(`${this.checkoutAddress.trim()}, Piura, Peru`);
+                        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, {
+                            headers: { 'Accept-Language': 'es' }
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data && data.length > 0) {
+                                const lat = parseFloat(data[0].lat);
+                                const lng = parseFloat(data[0].lon);
+                                
+                                this.gpsCoords = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                                this.onMarkerMove(lat, lng);
+
+                                if (this.map) {
+                                    this.map.setView([lat, lng], 16);
+                                }
+                                if (this.marker) {
+                                    this.marker.setLatLng([lat, lng]);
+                                }
+                                this.triggerNotification("🎯 Mapa fijado en tu dirección.");
+                            } else {
+                                this.triggerNotification("❌ Dirección no localizada. Arrastra el pin manualmente.");
+                            }
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        this.triggerNotification("❌ Error al conectar con el servidor de mapas.");
+                    }
+                },
+
+                async geocodeAddressSilently() {
+                    if (!this.checkoutAddress.trim() || this.checkoutAddress.length < 5) {
+                        return;
+                    }
+                    try {
+                        const query = encodeURIComponent(`${this.checkoutAddress.trim()}, Piura, Peru`);
+                        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, {
+                            headers: { 'Accept-Language': 'es' }
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data && data.length > 0) {
+                                const lat = parseFloat(data[0].lat);
+                                const lng = parseFloat(data[0].lon);
+                                
+                                this.gpsCoords = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                                const dist = this.calculateDistance(
+                                    this.restaurantCoords.lat, 
+                                    this.restaurantCoords.lng, 
+                                    lat, 
+                                    lng
+                                );
+                                this.deliveryDistance = dist;
+                                this.updateDeliveryCost(dist);
+
+                                if (this.map && this.marker) {
+                                    this.map.setView([lat, lng], 16);
+                                    this.marker.setLatLng([lat, lng]);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Geocoding silencioso falló:", e);
+                    }
+                },
+
+                async fetchMenu() {
+                    this.isLoadingMenu = true;
+                    try {
+                        // Dejamos en blanco de forma segura para activar el robusto Fallback local de BEERINGO
+                        const sheetId = '';
+                        const gid = '';
+                        if (!sheetId || !gid) throw new Error("Fallback local de catálogo activo");
+                    } catch (error) {
+                        console.log("Cargando catálogo local incorporado para BEERINGO:", error.message);
+                    } finally {
+                        this.isLoadingMenu = false;
+                    }
+                },
+
+                getFilteredProducts(categoryId) {
+                    return this.products.filter(p => {
+                        const matchesCategory = p.category === categoryId;
+                        const matchesSearch = p.name.toLowerCase().includes(this.searchTerm.toLowerCase()) || 
+                                              p.description.toLowerCase().includes(this.searchTerm.toLowerCase());
+                        return matchesCategory && matchesSearch;
+                    });
+                },
+
+                openProductDetail(product) {
+                    this.selectedProductForDetail = product;
+                    this.modalQuantity = 1; 
+                    this.detailCreamsSelections = [ [] ]; 
+                    this.isDetailOpen = true;
+                },
+
+                shouldShowCategory(categoryId) {
+                    return this.selectedCategory === 'todas' || this.selectedCategory === categoryId;
+                },
+
+                getProductsCountInCategory(categoryId) {
+                    return this.products.filter(p => p.category === categoryId).length;
+                },
+
+                getCremas() {
+                    return this.products.filter(p => p.category === 'cremas');
+                },
+
+                toggleCrema(itemIndex, cremaName) {
+                    if (!this.detailCreamsSelections[itemIndex]) {
+                        this.detailCreamsSelections[itemIndex] = [];
+                    }
+                    let selection = [...this.detailCreamsSelections[itemIndex]];
+                    const idx = selection.indexOf(cremaName);
+                    if (idx > -1) {
+                        selection.splice(idx, 1);
+                    } else {
+                        selection.push(cremaName);
+                    }
+                    this.detailCreamsSelections[itemIndex] = selection;
+                },
+
+                decreaseModalQty() {
+                    if (this.modalQuantity > 1) {
+                        this.modalQuantity--;
+                        this.detailCreamsSelections.pop();
+                    }
+                },
+
+                increaseModalQty() {
+                    this.modalQuantity++;
+                    this.detailCreamsSelections.push([]);
+                },
+
+                addToCartWithQty(product, qty) {
+                    if (!this.isOpen) {
+                        this.triggerNotification("❌ No puedes agregar productos. El local se encuentra cerrado.");
+                        return;
+                    }
+                    const amount = parseInt(qty) || 1;
+
+                    // El cliente solicita añadir acompañamientos seleccionables para la categoría "snacks"
+                    if (product.category === 'snacks') {
+                        for (let i = 0; i < amount; i++) {
+                            const selectedCreams = this.detailCreamsSelections[i] || [];
+                            const creamsKey = [...selectedCreams].sort().join(',');
+                            const cartItemId = `${product.id}-${creamsKey}`;
+
+                            const existingItem = this.cart.find(item => item.id === cartItemId);
+                            if (existingItem) {
+                                existingItem.quantity += 1;
+                            } else {
+                                this.cart.push({
+                                    id: cartItemId,
+                                    productId: product.id,
+                                    name: product.name,
+                                    price: product.price,
+                                    image: product.image,
+                                    category: product.category,
+                                    quantity: 1,
+                                    creams: [...selectedCreams]
+                                });
+                            }
+                        }
+                        this.triggerNotification(`🛒 Agregado: ${amount}x ${product.name} con salsas.`);
+                    } else {
+                        // Flujo normal para cervezas y bebidas sin salsas adicionales
+                        const existingItem = this.cart.find(item => item.id === product.id);
+                        if (existingItem) {
+                            existingItem.quantity += amount;
+                        } else {
+                            this.cart.push({
+                                id: product.id,
+                                productId: product.id,
+                                name: product.name,
+                                price: product.price,
+                                image: product.image,
+                                category: product.category,
+                                quantity: amount,
+                                creams: []
+                            });
+                        }
+                        this.triggerNotification(`🛒 Agregado: ${amount}x ${product.name}`);
+                    }
+                },
+
+                increaseQty(item) {
+                    item.quantity++;
+                },
+
+                decreaseQty(item) {
+                    if (item.quantity > 1) {
+                        item.quantity--;
+                    } else {
+                        this.removeItem(item);
+                    }
+                },
+
+                removeItem(item) {
+                    this.cart = this.cart.filter(i => i.id !== item.id);
+                },
+
+                getCartItemsCount() {
+                    return this.cart.reduce((sum, item) => sum + item.quantity, 0);
+                },
+
+                getCartTotal() {
+                    return this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                },
+
+                getCartTotalWithDelivery() {
+                    const subtotal = this.getCartTotal();
+                    const delivery = (this.checkoutDeliveryType === 'delivery' && !this.isOutOfRange) ? this.deliveryCost : 0;
+                    return subtotal + delivery;
+                },
+
+                scrollToMenu(categoryId) {
+                    this.selectedCategory = categoryId;
+                    setTimeout(() => {
+                        const el = document.getElementById(`sec-${categoryId}`);
+                        if (el) {
+                            window.scrollTo({
+                                top: el.offsetTop - 120,
+                                behavior: 'smooth'
+                            });
+                        }
+                    }, 100);
+                },
+
+                goToCheckout() {
+                    if (!this.isOpen) {
+                        this.errorMessage = "La casa se encuentra cerrada. No es posible procesar el pedido.";
+                        return;
+                    }
+                    this.currentStep = 'checkout';
+                    this.initMap();
+                },
+
+                initMap() {
+                    if (this.map) {
+                        setTimeout(() => {
+                            this.map.invalidateSize();
+                        }, 200);
+                        return;
+                    }
+
+                    setTimeout(async () => {
+                        let defaultLat = this.restaurantCoords.lat;
+                        let defaultLng = this.restaurantCoords.lng;
+                        let coordsSet = false;
+
+                        if (this.gpsCoords) {
+                            const parts = this.gpsCoords.split(',');
+                            if (parts.length === 2) {
+                                const parsedLat = parseFloat(parts[0]);
+                                const parsedLng = parseFloat(parts[1]);
+                                if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+                                    defaultLat = parsedLat;
+                                    defaultLng = parsedLng;
+                                    coordsSet = true;
+                                }
+                            }
+                        }
+
+                        if (!coordsSet && this.checkoutAddress.trim()) {
+                            await this.geocodeAddressSilently();
+                            if (this.gpsCoords) {
+                                const parts = this.gpsCoords.split(',');
+                                if (parts.length === 2) {
+                                    const parsedLat = parseFloat(parts[0]);
+                                    const parsedLng = parseFloat(parts[1]);
+                                    if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+                                        defaultLat = parsedLat;
+                                        defaultLng = parsedLng;
+                                    }
+                                }
+                            }
+                        }
+
+                        this.map = L.map('map').setView([defaultLat, defaultLng], 15);
+                        
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '© OpenStreetMap'
+                        }).addTo(this.map);
+
+                        const pinIcon = L.divIcon({
+                            html: `<i class="fa-solid fa-location-dot text-bb-red text-3xl drop-shadow-md"></i>`,
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 30],
+                            className: 'bg-transparent border-none'
+                        });
+
+                        this.marker = L.marker([defaultLat, defaultLng], { 
+                            draggable: true,
+                            icon: pinIcon
+                        }).addTo(this.map);
+
+                        this.onMarkerMove(defaultLat, defaultLng);
+
+                        this.marker.on('dragend', () => {
+                            const pos = this.marker.getLatLng();
+                            this.onMarkerMove(pos.lat, pos.lng);
+                            this.reverseGeocode(pos.lat, pos.lng);
+                        });
+
+                        this.map.on('click', (e) => {
+                            const pos = e.latlng;
+                            this.marker.setLatLng(pos);
+                            this.onMarkerMove(pos.lat, pos.lng);
+                            this.reverseGeocode(pos.lat, pos.lng);
+                        });
+
+                    }, 250);
+                },
+
+                copyToClipboard(text) {
+                    const el = document.createElement('textarea');
+                    el.value = text;
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    this.triggerNotification("📱 ¡Número de Yape copiado!");
+                },
+
+                triggerNotification(msg) {
+                    this.floatingNotification = msg;
+                    setTimeout(() => {
+                        if (this.floatingNotification === msg) {
+                            this.floatingNotification = '';
+                        }
+                    }, 3500);
+                },
+
+                sendToWhatsApp() {
+                    this.errorMessage = '';
+
+                    if (!this.isOpen) {
+                        this.errorMessage = "Lo sentimos, el establecimiento está cerrado en este momento.";
+                        return;
+                    }
+                    if (!this.checkoutName.trim()) {
+                        this.errorMessage = "Debes ingresar tu Nombre completo.";
+                        return;
+                    }
+                    if (!this.checkoutPhone.trim() || this.checkoutPhone.length < 9) {
+                        this.errorMessage = "Debes ingresar un número de Celular válido (9 dígitos).";
+                        return;
+                    }
+                    if (this.checkoutDeliveryType === 'delivery') {
+                        if (!this.checkoutAddress.trim()) {
+                            this.errorMessage = "Por favor, ingresa tu dirección exacta de entrega.";
+                            return;
+                        }
+                        if (this.isOutOfRange) {
+                            this.errorMessage = "La ubicación elegida supera nuestro rango máximo de reparto (9 km).";
+                            return;
+                        }
+                    }
+
+                    if (this.checkoutPaymentMethod === 'cash') {
+                        const amountToPayNum = parseFloat(this.cashAmountToPay);
+                        const totalToPay = this.getCartTotalWithDelivery();
+                        if (!this.cashAmountToPay || isNaN(amountToPayNum)) {
+                            this.errorMessage = "Por favor, ingresa con cuánto vas a pagar en efectivo.";
+                            return;
+                        }
+                        if (amountToPayNum < totalToPay) {
+                            this.errorMessage = `El monto de pago (S/ ${amountToPayNum.toFixed(2)}) debe ser igual o mayor al total (S/ ${totalToPay.toFixed(2)}).`;
+                            return;
+                        }
+                    }
+
+                    if (this.saveUserData) {
+                        this.saveProfileToLocalStorage();
+                    }
+
+                    // Teléfono de WhatsApp de BEERINGO (+51 969 299 888)
+                    const businessPhone = "51969299888"; 
+                    
+                    let msg = `🍺 *NUEVO PEDIDO - BEERINGO* 🍺\n`;
+                    msg += `_Cerveza artesanal con alma de viringo_\n\n`;
+                    msg += `👤 *Cliente:* ${this.checkoutName.trim()}\n`;
+                    msg += `📞 *Celular:* ${this.checkoutPhone.trim()}\n`;
+                    msg += `🛵 *Tipo de Entrega:* ${this.checkoutDeliveryType === 'delivery' ? 'Delivery' : 'Recojo en La casa'}\n`;
+                    
+                    if (this.checkoutDeliveryType === 'delivery') {
+                        msg += `📍 *Dirección:* ${this.checkoutAddress.trim()}\n`;
+                        if (this.checkoutReference.trim()) {
+                            msg += `🏢 *Referencia:* ${this.checkoutReference.trim()}\n`;
+                        }
+                        msg += `🗺️ *Ubicación GPS:* https://www.google.com/maps/search/?api=1&query=${this.gpsCoords.replace(/\s/g, '')}\n`;
+                        msg += `📏 *Distancia:* ${this.deliveryDistance.toFixed(2)} km\n`;
+                    } else {
+                        msg += `🏢 *Punto de Recojo:* Condominios Parque Santa Margarita / Céntrika, Piura\n`;
+                    }
+
+                    if (this.checkoutNotes.trim()) {
+                        msg += `📝 *Especificaciones:* ${this.checkoutNotes.trim()}\n`;
+                    }
+                    
+                    if (this.checkoutPaymentMethod === 'yape') {
+                        msg += `💵 *Método de Pago:* Pago Móvil (Yape / Plin) a Lober Carmen\n\n`;
+                    } else {
+                        const totalToPay = this.getCartTotalWithDelivery();
+                        const change = parseFloat(this.cashAmountToPay) - totalToPay;
+                        msg += `💵 *Método de Pago:* Efectivo\n`;
+                        msg += `💰 *Paga con:* S/ ${parseFloat(this.cashAmountToPay).toFixed(2)}\n`;
+                        msg += `🪙 *Vuelto:* S/ ${change.toFixed(2)}\n\n`;
+                    }
+                    
+                    msg += `📋 *PRODUCTOS PEDIDOS:* \n`;
+                    
+                    this.cart.forEach(item => {
+                        let creamsStr = '';
+                        if (item.creams && item.creams.length > 0) {
+                            creamsStr = ` [Salsas: ${item.creams.join(', ')}]`;
+                        }
+                        msg += `• ${item.quantity}x _${item.name}_${creamsStr} | S/ ${(item.price * item.quantity).toFixed(2)}\n`;
+                    });
+
+                    const subtotal = this.getCartTotal();
+                    const delivery = this.checkoutDeliveryType === 'delivery' ? this.deliveryCost : 0;
+                    const total = subtotal + delivery;
+
+                    msg += `\n📦 *Subtotal:* S/ ${subtotal.toFixed(2)}\n`;
+                    if (this.checkoutDeliveryType === 'delivery') {
+                        msg += `🚚 *Envío:* S/ ${delivery.toFixed(2)}\n`;
+                    }
+                    msg += `💰 *TOTAL GENERAL: S/ ${total.toFixed(2)}*\n\n`;
+                    
+                    if (this.checkoutPaymentMethod === 'yape') {
+                        msg += `⚡ _Por favor, envíame la captura del Yape realizado para agilizar la preparación de tu pedido._`;
+                    } else {
+                        msg += `⚡ _Por favor confírmame el pedido para iniciar el despacho inmediato._`;
+                    }
+
+                    const url = `https://api.whatsapp.com/send?phone=${businessPhone}&text=${encodeURIComponent(msg)}`;
+                    window.open(url, '_blank');
+                }
+            };
+        };
+    </script>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-bb-cream text-bb-dark font-sans min-h-screen selection:bg-bb-yellow selection:text-bb-dark transition-all duration-150 relative pb-10" 
+      x-data="bigBiteApp()"
+      :class="isCartOpen || isDetailOpen ? 'overflow-hidden h-screen' : ''" 
+      x-init="initData()">
+
+    <header class="bg-bb-dark text-white border-b border-bb-yellow/25 py-4 px-4 sticky top-0 z-40 shadow-xl">
+        <div class="max-w-6xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div id="logo-container" class="w-12 h-12 md:w-14 md:h-14 rounded-full bg-[#1A1A1A] overflow-hidden shadow-lg border-2 border-bb-yellow flex items-center justify-center p-0.5">
+                    <img :src="logoUrl" 
+                         alt="Logo BEERINGO" 
+                         class="w-full h-full object-cover rounded-full"
+                         onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='flex';">
+                    <span id="logo-fallback" class="text-bb-yellow font-brand text-2xl hidden font-black">B</span>
+                </div>
+                <div>
+                    <h1 class="font-brand text-2xl md:text-3xl tracking-wide text-bb-yellow leading-none font-black">BEERINGO</h1>
+                    <p class="text-[9px] md:text-xs font-bold tracking-widest text-white uppercase mt-0.5 opacity-90">Cerveza artesanal con alma de viringo</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <a href="https://www.instagram.com/beeringoperu?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==" 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   class="p-3 bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] text-white rounded-full hover:scale-105 transition-all flex items-center justify-center shadow-lg"
+                   title="Síguenos en Instagram">
+                    <i class="fa-brands fa-instagram text-lg md:text-xl"></i>
+                </a>
+
+                <button @click="isCartOpen = true" 
+                        class="relative p-3 bg-bb-yellow text-bb-dark rounded-full hover:bg-white transition-all flex items-center justify-center shadow-md">
+                    <i class="fa-solid fa-beer-mug-empty text-lg md:text-xl"></i>
+                    <span x-show="getCartItemsCount() > 0" 
+                          class="absolute -top-1 -right-1 bg-[#1A1A1A] text-bb-yellow font-extrabold text-[10px] h-5 w-5 rounded-full flex items-center justify-center animate-bounce shadow-md border border-bb-yellow"
+                          x-text="getCartItemsCount()"></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="bg-bb-yellow text-bb-dark py-2.5 px-4 text-xs font-bold shadow-md">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-bb-dark text-bb-yellow">
+                    <span :class="isOpen ? 'bg-emerald-500' : 'bg-rose-500'" class="w-1.5 h-1.5 rounded-full mr-1.5 animate-pulse"></span>
+                    <span x-text="isOpen ? 'La Casa Abierta' : 'La Casa Cerrada'"></span>
+                </span>
+                <span class="font-bold">
+                    <i class="fa-solid fa-clock mr-1"></i> 
+                    <span>Atención todos los días: 11:00 AM - 11:00 PM</span>
+                </span>
+            </div>
+            <div class="flex items-center gap-3 font-bold text-[11px]">
+                <span><i class="fa-solid fa-location-dot text-bb-dark mr-1"></i> Despacho desde Condominios Parque Santa Margarita, Piura</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto px-4 mt-6">
+        <div class="relative bg-bb-dark text-white rounded-3xl p-6 md:p-10 border border-bb-yellow/20 overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl">
+            <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-bb-yellow/10 via-transparent to-transparent"></div>
+            
+            <div class="space-y-4 text-center md:text-left z-10 max-w-xl">
+                <span class="bg-bb-yellow/10 text-bb-yellow text-[10px] font-extrabold uppercase tracking-widest px-3.5 py-1.5 rounded-full border border-bb-yellow/20">
+                    🍻 Receta Artesanal de Piura
+                </span>
+                <h2 class="font-brand text-4xl md:text-5xl text-white leading-tight font-black">
+                    ¿Ganas de una cerveza con <br class="hidden md:inline"> verdadera identidad?
+                </h2>
+                <p class="text-xs md:text-sm text-white/80 leading-relaxed font-semibold">
+                    Descubre el balance perfecto y el carácter de BEERINGO. Elaboradas en Piura con insumos premium y el alma del Viringo. ¡Pídelas frías directamente a tu mesa!
+                </p>
+                <div class="text-bb-yellow font-bold text-xs flex items-center justify-center md:justify-start gap-2 mt-1 animate-pulse">
+                    <i class="fa-solid fa-angles-down"></i>
+                    <span>¡Haz tu pedido de cervezas y snacks abajo!</span>
+                </div>
+                <div class="pt-2">
+                    <button @click="scrollToMenu('cervezas')" class="px-6 py-3 bg-bb-yellow hover:bg-white hover:text-bb-dark text-bb-dark font-extrabold text-xs rounded-xl transition shadow-lg uppercase tracking-wider">
+                        🛒 Explorar la Carta
+                    </button>
+                </div>
+            </div>
+            
+            <div class="w-44 h-44 md:w-56 md:h-56 rounded-full overflow-hidden shadow-2xl border-4 border-bb-yellow rotate-3 hover:rotate-0 transition-all duration-500 bg-bb-shadow flex-shrink-0">
+                <img src="https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=500&q=80" 
+                     alt="Craft Beer Pour" 
+                     class="w-full h-full object-cover">
+            </div>
+        </div>
+    </div>
+
+    <main class="max-w-6xl mx-auto px-4 py-8 md:py-12">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
+            
+            <!-- Barra de Categorías Lateral -->
+            <aside class="lg:col-span-1 sticky top-[84px] z-30 bg-bb-cream lg:bg-transparent -mx-4 px-4 py-2 lg:p-0 lg:m-0 border-b border-bb-yellow/10 lg:border-none">
+                <h3 class="hidden lg:block font-brand text-lg text-bb-dark font-black mb-4 px-1">Secciones de la Casa</h3>
+                <div class="flex lg:flex-col gap-2 overflow-x-auto no-scrollbar lg:overflow-visible pb-2 lg:pb-0">
+                    <button @click="selectedCategory = 'todas'" 
+                            class="px-5 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap tracking-wide transition-all duration-200 text-left w-auto lg:w-full flex items-center justify-between gap-3"
+                            :class="selectedCategory === 'todas' ? 'bg-bb-dark text-bb-yellow shadow-md' : 'bg-white hover:bg-bb-yellow/5 text-bb-dark border border-bb-yellow/10'">
+                        <span>📋 Todo el Menú</span>
+                        <span class="hidden lg:inline text-[10px] bg-bb-dark/5 text-bb-dark px-2 py-0.5 rounded-full font-black" x-text="products.filter(p => p.category !== 'cremas').length"></span>
+                    </button>
+                    
+                    <template x-for="cat in categories" :key="cat.id">
+                        <button @click="selectedCategory = cat.id" 
+                                class="px-5 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap tracking-wide transition-all duration-200 text-left w-auto lg:w-full flex items-center justify-between gap-3"
+                                :class="selectedCategory === cat.id ? 'bg-bb-dark text-bb-yellow shadow-md' : 'bg-white hover:bg-bb-yellow/5 text-bb-dark border border-bb-yellow/10'">
+                            <span x-text="cat.name"></span>
+                            <span class="hidden lg:inline text-[10px] bg-bb-dark/5 text-bb-dark px-2 py-0.5 rounded-full font-black" x-text="getProductsCountInCategory(cat.id)"></span>
+                        </button>
+                    </template>
+                </div>
+            </aside>
+
+            <div class="lg:col-span-3 space-y-10">
+                <template x-for="cat in categories" :key="cat.id">
+                    <div x-show="shouldShowCategory(cat.id)" class="space-y-4" :id="`sec-${cat.id}`">
+                        <h3 class="font-brand text-xl md:text-2xl text-bb-dark font-black border-b-2 border-bb-yellow pb-2 flex justify-between items-center">
+                            <span x-text="cat.name"></span>
+                        </h3>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <template x-for="product in getFilteredProducts(cat.id)" :key="product.id">
+                                <div @click="openProductDetail(product)"
+                                     class="bg-white rounded-2xl border border-bb-yellow/10 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex items-stretch min-h-[140px] cursor-pointer hover:border-bb-yellow/40">
+                                    
+                                    <div class="w-28 sm:w-36 flex-shrink-0 relative overflow-hidden bg-bb-cream">
+                                        <img :src="product.image" 
+                                             :alt="product.name" 
+                                             class="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                                             onerror="this.src='https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=500&q=80'">
+                                    </div>
+
+                                    <div class="p-4 flex flex-col justify-between flex-1 space-y-2">
+                                        <div>
+                                            <h4 class="font-bold text-sm md:text-base text-bb-dark" x-text="product.name"></h4>
+                                            <p class="text-[11px] md:text-xs text-bb-shadow/70 line-clamp-2 md:line-clamp-3 leading-relaxed mt-1" x-text="product.description"></p>
+                                        </div>
+
+                                        <div class="flex items-center justify-between pt-2 border-t border-bb-cream">
+                                            <span class="font-black text-xs md:text-sm text-bb-dark" x-text="`S/ ${product.price.toFixed(2)}`"></span>
+
+                                            <button @click.stop="openProductDetail(product)" 
+                                                    class="px-4 py-1.5 bg-bb-dark text-bb-yellow hover:bg-bb-yellow hover:text-bb-dark text-xs font-bold rounded-xl transition shadow-sm hover:scale-102 flex items-center gap-1">
+                                                <i class="fa-solid fa-plus text-[9px]"></i>
+                                                <span>Añadir</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </main>
+
+    <div x-show="isDetailOpen" 
+         class="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 sm:p-6" 
+         style="display: none;"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0">
+        
+        <div class="absolute inset-0 bg-black/75 backdrop-blur-xs transition-opacity" @click="isDetailOpen = false"></div>
+
+        <div class="bg-white rounded-3xl overflow-hidden max-w-lg w-full shadow-2xl border border-bb-yellow/15 relative z-10 flex flex-col max-h-[85vh] sm:max-h-[90vh] transform transition-all"
+             x-show="isDetailOpen"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+             x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+             x-transition:leave-end="opacity-0 translate-y-4 scale-95">
+            
+            <button @click="isDetailOpen = false" 
+                    class="absolute top-4 right-4 z-20 bg-black/60 hover:bg-bb-red text-white w-9 h-9 rounded-full flex items-center justify-center transition shadow-md">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <div class="h-44 sm:h-56 w-full relative overflow-hidden bg-bb-cream flex-shrink-0">
+                <img :src="selectedProductForDetail?.image" 
+                     :alt="selectedProductForDetail?.name" 
+                     class="w-full h-full object-cover"
+                     onerror="this.src='https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=500&q=80'">
+                
+                <div class="absolute bottom-4 left-4">
+                    <span class="bg-bb-dark text-bb-yellow text-[10px] font-extrabold uppercase tracking-widest px-3.5 py-1.5 rounded-full shadow-md border-2 border-bb-yellow"
+                          x-text="selectedProductForDetail ? categories.find(c => c.id === selectedProductForDetail.category)?.name : ''">
+                    </span>
+                </div>
+            </div>
+
+            <div class="p-6 space-y-4 flex-1 overflow-y-auto">
+                <h3 class="font-brand text-2xl text-bb-dark tracking-wide font-black" x-text="selectedProductForDetail?.name"></h3>
+                <p class="text-xs sm:text-sm text-bb-shadow/80 font-semibold leading-relaxed" x-text="selectedProductForDetail?.description"></p>
+                
+                <!-- Selector de cantidad para las cervezas o snacks -->
+                <div class="flex items-center justify-between bg-bb-cream p-3 rounded-xl border border-bb-yellow/10">
+                    <span class="text-xs font-bold text-bb-dark">¿Cuántas unidades deseas?</span>
+                    <div class="flex items-center gap-3 bg-white border border-bb-yellow/20 rounded-xl px-2.5 py-1">
+                        <button type="button" @click="decreaseModalQty()" class="text-bb-yellow hover:text-bb-dark font-black px-1 text-sm"><i class="fa-solid fa-minus"></i></button>
+                        <span class="text-sm font-black text-bb-dark min-w-[20px] text-center" x-text="modalQuantity"></span>
+                        <button type="button" @click="increaseModalQty()" class="text-bb-yellow hover:text-bb-dark font-black px-1 text-sm"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                </div>
+
+                <!-- Personalización del producto (Salsas opcionales para snacks de maridaje) -->
+                <template x-if="selectedProductForDetail && selectedProductForDetail.category === 'snacks'">
+                    <div class="space-y-4 border-t border-bb-yellow/10 pt-4">
+                        <h4 class="font-bold text-xs uppercase tracking-wider text-bb-dark flex items-center gap-1.5">
+                            <i class="fa-solid fa-pepper-hot text-bb-yellow"></i> Selecciona cremas para acompañar tus snacks:
+                        </h4>
+                        
+                        <template x-for="(selection, index) in detailCreamsSelections" :key="index">
+                            <div class="bg-bb-cream p-3 rounded-xl border border-bb-yellow/10 space-y-2">
+                                <p class="text-xs font-black text-bb-dark" x-text="`Para tu porción #${index + 1}:`"></p>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <template x-for="crema in getCremas()" :key="crema.id">
+                                        <label class="flex items-center gap-2 bg-white p-2 rounded-lg border border-bb-yellow/5 cursor-pointer select-none">
+                                            <input type="checkbox" 
+                                                   :checked="selection.includes(crema.name)" 
+                                                   @change="toggleCrema(index, crema.name)"
+                                                   class="rounded text-bb-yellow focus:ring-bb-yellow w-4 h-4">
+                                            <span class="text-xs font-semibold text-bb-dark" x-text="crema.name"></span>
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <div class="flex items-center justify-between pt-4 border-t border-bb-yellow/10">
+                    <div>
+                        <span class="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Precio Unitario</span>
+                        <span class="font-black text-xl text-bb-dark" x-text="`S/ ${selectedProductForDetail?.price.toFixed(2)}`"></span>
+                    </div>
+
+                    <button @click="addToCartWithQty(selectedProductForDetail, modalQuantity); isDetailOpen = false" 
+                            class="px-6 py-3 bg-bb-dark hover:bg-bb-yellow text-bb-yellow hover:text-bb-dark text-xs font-extrabold rounded-xl transition shadow-md flex items-center gap-2 transform active:scale-95 uppercase tracking-wider border border-bb-yellow/20">
+                        <i class="fa-solid fa-check text-[10px]"></i>
+                        <span>Confirmar e Incluir</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="isCartOpen" class="fixed inset-0 z-50 overflow-hidden" style="display: none;">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-xs transition-opacity" @click="isCartOpen = false"></div>
+
+        <div class="absolute inset-y-0 right-0 max-w-full flex">
+            <div class="w-screen max-w-lg bg-white flex flex-col h-full shadow-2xl border-l border-bb-yellow/15"
+                 x-transition:enter="transform transition ease-out duration-300"
+                 x-transition:enter-start="translate-x-full"
+                 x-transition:enter-end="translate-x-0"
+                 x-transition:leave="transform transition ease-in duration-200"
+                 x-transition:leave-start="translate-x-0"
+                 x-transition:leave-end="translate-x-full">
+                
+                <!-- Encabezado del carrito -->
+                <div class="p-4 sm:p-5 bg-bb-dark text-white flex items-center justify-between flex-shrink-0 border-b border-bb-yellow/20">
+                    <div class="flex items-center gap-2">
+                        <button x-show="currentStep === 'checkout'" @click="currentStep = 'cart'" class="text-bb-yellow hover:text-white mr-1 text-xs flex items-center gap-1 bg-white/10 px-2.5 py-1.5 rounded-lg transition font-extrabold">
+                            <i class="fa-solid fa-chevron-left text-[10px]"></i> Volver
+                        </button>
+                        <div class="flex items-center gap-1.5" x-show="currentStep === 'cart'">
+                            <i class="fa-solid fa-beer-mug-empty text-bb-yellow text-lg sm:text-xl"></i>
+                            <h2 class="font-brand text-base sm:text-lg tracking-wide font-black">Mi Pedido</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5" x-show="currentStep === 'checkout'">
+                            <h2 class="font-brand text-base sm:text-lg tracking-wide font-black">Confirmar Detalles</h2>
+                        </div>
+                    </div>
+                    <button @click="isCartOpen = false" class="text-white hover:text-bb-yellow text-lg sm:text-xl p-1">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div x-show="errorMessage" class="bg-rose-50 text-rose-800 text-xs px-5 py-3 border-b border-rose-200 flex items-center justify-between flex-shrink-0 font-bold">
+                    <span x-text="errorMessage"></span>
+                    <button @click="errorMessage = ''" class="text-rose-500 font-bold px-2">X</button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 sm:space-y-6">
+                    
+                    <!-- VISTA 1: DETALLES DEL CARRITO -->
+                    <div x-show="currentStep === 'cart'" class="space-y-4">
+                        <div x-show="!isOpen" class="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-3.5 text-xs font-semibold">
+                            <p class="flex items-center gap-1.5 text-rose-800 font-black uppercase tracking-wider text-[10px]">
+                                <i class="fa-solid fa-circle-exclamation"></i> Casa Cerrada actualmente
+                            </p>
+                            <p class="text-rose-950/80 mt-0.5">Estamos fuera de horario de atención comercial. Puedes explorar la carta pero no podrás procesar el pedido.</p>
+                        </div>
+
+                        <div x-show="cart.length === 0" class="text-center py-12 space-y-3">
+                            <i class="fa-solid fa-beer-mug-empty text-5xl text-bb-yellow/30 animate-pulse"></i>
+                            <p class="text-xs font-bold text-bb-shadow/80">Tu carrito de BEERINGO está vacío. ¡Elige tu favorita!</p>
+                        </div>
+
+                        <div x-show="cart.length > 0" class="divide-y divide-bb-gray">
+                            <template x-for="item in cart" :key="item.id">
+                                <div class="py-4 flex items-center justify-between gap-4">
+                                    <div class="w-12 h-12 rounded-xl overflow-hidden bg-bb-cream border border-bb-yellow/10 flex-shrink-0">
+                                        <img :src="item.image" 
+                                             alt="" 
+                                             class="w-full h-full object-cover">
+                                    </div>
+
+                                    <div class="flex-1">
+                                        <h4 class="font-bold text-xs md:text-sm text-bb-dark" x-text="item.name"></h4>
+                                        <template x-if="item.creams && item.creams.length > 0">
+                                            <p class="text-[10px] text-bb-yellow font-bold leading-tight mt-1">
+                                                Salsas: <span class="text-bb-shadow/85" x-text="item.creams.join(', ')"></span>
+                                            </p>
+                                        </template>
+                                        <p class="text-[11px] font-bold text-bb-shadow/70 mt-0.5" x-text="`S/ ${item.price.toFixed(2)} c/u`"></p>
+                                    </div>
+
+                                    <div class="flex items-center gap-2 border border-bb-yellow/20 rounded-xl px-2 py-1 bg-bb-cream">
+                                        <button @click="decreaseQty(item)" class="text-bb-dark hover:text-bb-yellow px-1.5 py-0.5 text-xs font-black"><i class="fa-solid fa-minus"></i></button>
+                                        <span class="text-xs font-bold text-bb-dark px-1" x-text="item.quantity"></span>
+                                        <button @click="increaseQty(item)" class="text-bb-dark hover:text-bb-yellow px-1.5 py-0.5 text-xs font-black"><i class="fa-solid fa-plus"></i></button>
+                                    </div>
+
+                                    <div class="text-right min-w-[70px]">
+                                        <span class="font-black text-xs md:text-sm text-bb-dark" x-text="`S/ ${(item.price * item.quantity).toFixed(2)}`"></span>
+                                        <button @click="removeItem(item)" class="block text-rose-500 hover:text-rose-700 text-xs mt-1 ml-auto p-1">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div x-show="currentStep === 'checkout'" class="space-y-4 sm:space-y-5">
+                        
+                        <div class="bg-bb-yellow/10 p-3 sm:p-4 rounded-xl border border-bb-yellow/25 flex items-center justify-between gap-3">
+                            <div class="flex-1">
+                                <h4 class="text-[10px] sm:text-xs font-black text-bb-dark uppercase tracking-wider">💾 Guardar mis datos</h4>
+                                <p class="text-[9px] sm:text-[10px] text-bb-shadow/80 font-semibold mt-0.5">Almacena el perfil para automatizar futuros pedidos.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" x-model="saveUserData" class="sr-only peer">
+                                <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-bb-dark"></div>
+                            </label>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h3 class="font-brand text-xs sm:text-sm text-bb-dark font-black border-b border-bb-yellow pb-1 uppercase tracking-wider">Mis Datos</h3>
+                            <div>
+                                <label class="block text-[11px] font-bold text-bb-dark mb-1">Nombre y Apellido *</label>
+                                <input type="text" x-model="checkoutName" placeholder="Escribe tu nombre" class="w-full text-xs py-2.5 px-3 rounded-xl border border-bb-yellow/20 focus:border-bb-dark focus:ring-1 focus:ring-bb-dark outline-none bg-bb-cream font-semibold text-bb-dark">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-bb-dark mb-1">Celular de Contacto *</label>
+                                <input type="tel" x-model="checkoutPhone" maxlength="9" placeholder="912345678" class="w-full text-xs py-2.5 px-3 rounded-xl border border-bb-yellow/20 focus:border-bb-dark focus:ring-1 focus:ring-bb-dark outline-none bg-bb-cream font-semibold text-bb-dark">
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h3 class="font-brand text-xs sm:text-sm text-bb-dark font-black border-b border-bb-yellow pb-1 uppercase tracking-wider">Logística de Entrega</h3>
+                            <div>
+                                <label class="block text-[11px] font-bold text-bb-dark mb-1">Tipo de Entrega *</label>
+                                <div class="grid grid-cols-2 gap-2 mb-2">
+                                    <button @click="checkoutDeliveryType = 'delivery'" 
+                                            :class="checkoutDeliveryType === 'delivery' ? 'bg-bb-dark text-bb-yellow font-black' : 'bg-bb-cream text-bb-shadow'"
+                                            class="py-2.5 rounded-xl text-xs text-center transition font-semibold border border-bb-yellow/10">
+                                        🚗 Envío a Domicilio
+                                    </button>
+                                    <button @click="checkoutDeliveryType = 'local'" 
+                                            :class="checkoutDeliveryType === 'local' ? 'bg-bb-dark text-bb-yellow font-black' : 'bg-bb-cream text-bb-shadow'"
+                                            class="py-2.5 rounded-xl text-xs text-center transition font-semibold border border-bb-yellow/10">
+                                        🏪 Recojo en La Casa
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div x-show="checkoutDeliveryType === 'delivery'" class="space-y-3">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-bb-dark mb-1">Dirección exacta en Piura *</label>
+                                    <div class="flex gap-2">
+                                        <input type="text" 
+                                               x-model="checkoutAddress" 
+                                               x-on:input.debounce.800ms="geocodeAddressSilently()"
+                                               @keydown.enter.prevent="geocodeAddress()"
+                                               placeholder="Calle, Manzana, Lote o Condominio" 
+                                               class="flex-1 text-xs py-2.5 px-3 rounded-xl border border-bb-yellow/20 focus:border-bb-dark outline-none bg-bb-cream font-semibold text-bb-dark">
+                                        <button type="button" 
+                                                @click="geocodeAddress()" 
+                                                class="px-4 py-2.5 bg-bb-dark hover:bg-bb-yellow text-bb-yellow hover:text-bb-dark rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm border border-bb-yellow/10">
+                                            <i class="fa-solid fa-magnifying-glass-location text-sm"></i>
+                                            <span>Buscar</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <button type="button"
+                                            @click="getCurrentLocationGPS()"
+                                            class="w-full py-2.5 px-4 bg-bb-yellow/10 hover:bg-bb-yellow/20 text-bb-dark border-2 border-bb-yellow border-dashed rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
+                                        <i class="fa-solid fa-location-crosshairs text-sm"></i>
+                                        <span>📍 Usar mi ubicación GPS actual</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div x-show="checkoutDeliveryType === 'delivery'">
+                                <label class="block text-[11px] font-bold text-bb-dark mb-1">Referencia adicional <span class="text-gray-400 font-normal">(Opcional)</span></label>
+                                <input type="text" x-model="checkoutReference" placeholder="Frente a parque, timbre, color de fachada" class="w-full text-xs py-2.5 px-3 rounded-xl border border-bb-yellow/20 focus:border-bb-dark outline-none bg-bb-cream font-semibold text-bb-dark">
+                            </div>
+
+                            <div x-show="checkoutDeliveryType === 'delivery'" class="space-y-1">
+                                <label class="block text-[11px] font-bold text-bb-dark">Arrastra el marcador sobre tu casa en el mapa *</label>
+                                <div id="map" class="h-40 sm:h-56 rounded-2xl border-2 border-bb-yellow/20 overflow-hidden shadow-inner mt-1"></div>
+                                
+                                <div class="grid grid-cols-2 gap-2 mt-2">
+                                    <div class="flex flex-col bg-bb-cream p-2.5 rounded-xl border border-bb-yellow/10">
+                                        <span class="text-[9px] text-gray-500 font-black uppercase">Distancia a La Casa</span>
+                                        <span class="text-xs font-black text-bb-dark" x-text="deliveryDistance ? `${deliveryDistance.toFixed(2)} km` : 'Calculando...'"></span>
+                                    </div>
+                                    <div class="flex flex-col bg-bb-cream p-2.5 rounded-xl border border-bb-yellow/10" :class="isOutOfRange ? 'bg-rose-50 border-rose-200' : ''">
+                                        <span class="text-[9px] text-gray-500 font-black uppercase">Costo de Envío</span>
+                                        <span class="text-xs font-black" :class="isOutOfRange ? 'text-rose-600' : 'text-bb-dark'" 
+                                              x-text="isOutOfRange ? 'Fuera de Cobertura' : `S/ ${deliveryCost.toFixed(2)}`"></span>
+                                    </div>
+                                </div>
+                                
+                                <div x-show="isOutOfRange" class="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-3 text-xs font-semibold mt-2">
+                                    <p class="flex items-center gap-1.5 text-rose-800 font-black uppercase tracking-wider text-[10px]">
+                                        <i class="fa-solid fa-triangle-exclamation"></i> Límite de Cobertura Superado (9 km)
+                                    </p>
+                                    <p class="text-rose-950/80 mt-0.5">El punto se encuentra fuera de nuestro radio. Elige "Recojo en La Casa" o selecciona una ubicación de entrega más cercana.</p>
+                                </div>
+
+                                <div class="flex items-center justify-between text-[9px] sm:text-[10px] text-bb-shadow/80 font-bold bg-bb-yellow/5 p-2 rounded-lg mt-1 border border-bb-yellow/10">
+                                    <span>📍 Coordenadas:</span>
+                                    <span class="text-bb-dark font-mono font-black" x-text="gpsCoords || 'Buscando satélites...'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-bb-dark mb-1">Notas especiales para el establecimiento</label>
+                            <input type="text" x-model="checkoutNotes" placeholder="Especificaciones, indicaciones, etc." class="w-full text-xs py-2.5 px-3 rounded-xl border border-bb-yellow/20 focus:border-bb-dark outline-none bg-bb-cream font-semibold text-bb-dark">
+                        </div>
+
+                        <div class="space-y-4 bg-bb-cream p-4 rounded-3xl border border-bb-yellow/10 shadow-sm text-left">
+                            <h4 class="text-xs font-black text-bb-dark uppercase tracking-wider">Forma de Pago de BEERINGO</h4>
+                            
+                            <div class="grid grid-cols-2 gap-3 bg-white p-1.5 rounded-full border border-bb-yellow/15">
+                                <button type="button" 
+                                        @click="checkoutPaymentMethod = 'yape'"
+                                        :class="checkoutPaymentMethod === 'yape' ? 'bg-bb-dark text-bb-yellow' : 'bg-transparent text-bb-dark/70 hover:text-bb-dark'"
+                                        class="py-2.5 px-4 rounded-full text-xs font-black transition-all duration-200 flex items-center justify-center gap-2">
+                                    <span x-show="checkoutPaymentMethod === 'yape'" class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                                    <span>📱 Yape / Plin</span>
+                                </button>
+                                
+                                <button type="button" 
+                                        @click="checkoutPaymentMethod = 'cash'"
+                                        :class="checkoutPaymentMethod === 'cash' ? 'bg-[#15803d] text-white' : 'bg-transparent text-bb-dark/70 hover:text-bb-dark'"
+                                        class="py-2.5 px-4 rounded-full text-xs font-black transition-all duration-200 flex items-center justify-center gap-2">
+                                    <span x-show="checkoutPaymentMethod === 'cash'" class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
+                                    <span>💵 Efectivo</span>
+                                </button>
+                            </div>
+
+                            <!-- Panel de Pago Móvil -->
+                            <div x-show="checkoutPaymentMethod === 'yape'" 
+                                 class="bg-[#742d8c] text-white p-4 rounded-2xl border border-[#5a1b70] space-y-3 shadow-md"
+                                 x-transition:enter="transition ease-out duration-200"
+                                 x-transition:enter-start="opacity-0 scale-95"
+                                 x-transition:enter-end="opacity-100 scale-100">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="flex items-center gap-3">
+                                        <div class="bg-cyan-400 text-[#742d8c] font-black text-[9px] px-2 py-1 rounded-md shadow-xs uppercase">Pago Móvil</div>
+                                        <div class="text-left">
+                                            <p class="font-extrabold text-sm sm:text-base tracking-wider">+51 969 299 888</p>
+                                            <p class="text-[9px] sm:text-[10px] text-white/95 font-bold leading-none mt-1">Lober Carmen</p>
+                                        </div>
+                                    </div>
+                                    <button type="button" 
+                                            @click="copyToClipboard('+51969299888')" 
+                                            class="px-3.5 py-2 bg-cyan-400 hover:bg-cyan-300 text-[#742d8c] font-black text-[10px] rounded-xl transition shadow-xs active:scale-95 uppercase">
+                                        Copiar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Panel de Pago en Efectivo -->
+                            <div x-show="checkoutPaymentMethod === 'cash'" 
+                                 class="bg-white p-4 rounded-2xl border border-bb-yellow/10 space-y-3 shadow-sm"
+                                 x-transition:enter="transition ease-out duration-200"
+                                 x-transition:enter-start="opacity-0 scale-95"
+                                 x-transition:enter-end="opacity-100 scale-100">
+                                <div class="space-y-2 text-left">
+                                    <label class="block text-[11px] font-bold text-bb-dark">¿Con cuánto vas a pagar? *</label>
+                                    <div class="relative rounded-xl shadow-xs">
+                                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                            <span class="text-xs font-black text-bb-dark">S/</span>
+                                        </div>
+                                        <input type="number" 
+                                               step="0.10" 
+                                               x-model="cashAmountToPay" 
+                                               :placeholder="`Ej: S/ ${(getCartTotalWithDelivery() + 10).toFixed(2)}`" 
+                                               class="w-full text-xs py-2.5 pl-8 pr-3 rounded-xl border border-bb-yellow/20 focus:border-[#15803d] focus:ring-1 focus:ring-[#15803d] outline-none bg-bb-cream font-bold text-bb-dark">
+                                    </div>
+                                    
+                                    <div class="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-left" x-show="Number(cashAmountToPay) > 0">
+                                        <template x-if="Number(cashAmountToPay) >= getCartTotalWithDelivery()">
+                                            <p class="text-emerald-800 font-semibold flex justify-between items-center">
+                                                <span>💵 Vuelto estimado:</span>
+                                                <span class="font-black text-sm" x-text="`S/ ${(Number(cashAmountToPay) - getCartTotalWithDelivery()).toFixed(2)}`"></span>
+                                            </p>
+                                        </template>
+                                        <template x-if="Number(cashAmountToPay) < getCartTotalWithDelivery()">
+                                            <p class="text-rose-600 font-bold">
+                                                ⚠️ El monto ingresado debe cubrir el total de S/ <span x-text="getCartTotalWithDelivery().toFixed(2)"></span>.
+                                            </p>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <p x-show="checkoutPaymentMethod === 'yape'" class="text-[10px] text-bb-shadow/80 font-bold text-center leading-normal mt-1">
+                                Envía el pago digital por el total requerido y envía la captura de confirmación a través de WhatsApp.
+                            </p>
+                            <p x-show="checkoutPaymentMethod === 'cash'" class="text-[10px] text-bb-shadow/80 font-bold text-center leading-normal mt-1">
+                                Ten el dinero listo al momento de la entrega para agilizar el despacho.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div x-show="cart.length > 0" class="p-3.5 sm:p-5 border-t border-bb-gray bg-white space-y-2 sm:space-y-4 flex-shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+                    
+                    <div class="space-y-1 sm:space-y-1.5 text-xs font-bold text-bb-shadow/90" :class="currentStep === 'checkout' ? 'hidden sm:block' : ''">
+                        <div class="flex justify-between">
+                            <span>Subtotal:</span>
+                            <span x-text="`S/ ${getCartTotal().toFixed(2)}`"></span>
+                        </div>
+                        <div class="flex justify-between text-amber-700" x-show="checkoutDeliveryType === 'delivery'">
+                            <span>Delivery de la casa:</span>
+                            <span x-text="isOutOfRange ? 'Fuera de cobertura' : `S/ ${deliveryCost.toFixed(2)}`"></span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <!-- Botonera Vista 1: Carrito simple -->
+                        <div x-show="currentStep === 'cart'" class="space-y-3">
+                            <div class="flex justify-between text-sm sm:text-base font-black text-bb-dark pt-1 border-t border-bb-gray">
+                                <span>Total General:</span>
+                                <span x-text="`S/ ${getCartTotal().toFixed(2)}`"></span>
+                            </div>
+                            <button :disabled="!isOpen" 
+                                    @click="goToCheckout()" 
+                                    :class="!isOpen ? 'bg-gray-400 cursor-not-allowed shadow-none text-white' : 'bg-bb-dark text-bb-yellow hover:bg-bb-yellow hover:text-bb-dark'"
+                                    class="w-full py-3 sm:py-4 font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-xs sm:text-sm uppercase tracking-wide border border-bb-yellow/20">
+                                <span x-text="isOpen ? 'Proceder al Pago' : 'La Casa Cerrada'"></span>
+                                <i x-show="isOpen" class="fa-solid fa-arrow-right text-[10px] sm:text-xs"></i>
+                            </button>
+                        </div>
+
+                        <!-- Botonera Vista 2: Finalizar pedido -->
+                        <div x-show="currentStep === 'checkout'" class="flex sm:flex-col justify-between items-center gap-3 pt-1 border-t border-bb-gray sm:border-t-0">
+                            <div class="flex flex-col text-left mr-auto sm:w-full sm:pb-2 sm:border-b sm:border-bb-gray">
+                                <span class="text-[8px] sm:text-[9px] text-gray-500 font-extrabold uppercase tracking-wider leading-none">Total General</span>
+                                <span class="text-base sm:text-lg font-black text-bb-dark leading-tight" x-text="`S/ ${getCartTotalWithDelivery().toFixed(2)}`"></span>
+                                <span class="text-[8px] text-emerald-600 font-bold block" x-show="checkoutDeliveryType === 'delivery' && !isOutOfRange">incluye envío</span>
+                                <span class="text-[8px] text-rose-600 font-bold block" x-show="checkoutDeliveryType === 'delivery' && isOutOfRange">Fuera de cobertura</span>
+                            </div>
+
+                            <button @click="sendToWhatsApp()" 
+                                    :disabled="(checkoutDeliveryType === 'delivery' && isOutOfRange) || !isOpen"
+                                    :class="((checkoutDeliveryType === 'delivery' && isOutOfRange) || !isOpen) ? 'bg-gray-400 cursor-not-allowed shadow-none text-white' : 'bg-[#25D366] hover:bg-[#128C7E] text-white'"
+                                    class="flex-1 sm:w-full py-2.5 sm:py-3.5 px-3 sm:px-4 font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm uppercase tracking-wide">
+                                <i class="fa-brands fa-whatsapp text-base sm:text-lg"></i>
+                                <span class="inline sm:hidden" x-text="!isOpen ? 'Cerrado' : (isOutOfRange && checkoutDeliveryType === 'delivery' ? 'Fijar Ubicación' : 'Confirmar')"></span>
+                                <span class="hidden sm:inline" x-text="!isOpen ? 'Establecimiento Cerrado' : (isOutOfRange && checkoutDeliveryType === 'delivery' ? 'Fuera de Cobertura de Delivery' : 'Enviar Pedido por WhatsApp')"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Notificación Flotante -->
+    <div x-show="floatingNotification" 
+         class="fixed bottom-4 left-4 right-4 md:left-auto md:w-80 bg-bb-dark text-white p-4 rounded-xl shadow-2xl z-50 flex items-center justify-between border border-bb-yellow/20"
+         style="display: none;"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-4"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-4">
+        <span class="text-xs font-bold" x-text="floatingNotification"></span>
+        <button @click="floatingNotification = ''" class="text-bb-yellow font-black text-xs px-2">OK</button>
+    </div>
+
+    <!-- Botón Flotante de Acceso Rápido al Carrito -->
+    <button @click="isCartOpen = true" 
+            x-show="!isCartOpen" 
+            class="fixed bottom-4 right-4 z-40 bg-bb-dark text-bb-yellow font-bold py-2.5 px-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center gap-2 border border-bb-yellow text-xs sm:text-sm"
+            style="display: none;"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 translate-y-10 scale-95"
+            x-transition:enter-end="opacity-100 translate-y-0 scale-100">
+        
+        <span class="relative">
+            <i class="fa-solid fa-beer-mug-empty text-sm sm:text-base text-bb-yellow"></i>
+            <span x-show="getCartItemsCount() > 0" 
+                  class="absolute -top-2.5 -right-2.5 bg-bb-yellow text-bb-dark font-black text-[8px] h-4 w-4 rounded-full flex items-center justify-center border border-bb-dark animate-pulse"
+                  x-text="getCartItemsCount()"></span>
+        </span>
+        <span class="tracking-wide uppercase text-[10px] sm:text-xs font-black">Mi Carrito</span>
+    </button>
+
+</body>
+</html>
