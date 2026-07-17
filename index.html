@@ -96,12 +96,28 @@
                 checkoutPaymentMethod: 'yape', // 'yape' (Pago Móvil) o 'cash'
                 cashAmountToPay: '', // Monto ingresado con el que pagará
 
+                // Gestión dinámica de 2 Direcciones de Despacho (La Casa)
+                selectedBase: 'santa_margarita',
+                bases: {
+                    santa_margarita: {
+                        name: 'Condominios Parque Santa Margarita',
+                        coords: { lat: -5.167472, lng: -80.661306 }
+                    },
+                    centrika: {
+                        name: 'Condominios Céntrika',
+                        coords: { lat: -5.186583, lng: -80.647611 }
+                    }
+                },
+
                 // Sistema de Cotización por Distancia GPS desde base de despacho
                 deliveryDistance: 0,
                 deliveryCost: 0,
                 isOutOfRange: false,
-                // Coordenadas exactas proporcionadas para Condominios Parque Santa Margarita
-                restaurantCoords: { lat: -5.167472, lng: -80.661306 }, 
+
+                // Propiedad computada para obtener coordenadas de la base activa
+                get restaurantCoords() {
+                    return this.bases[this.selectedBase].coords;
+                },
 
                 // Sistema de persistencia local (LocalStorage)
                 saveUserData: false,
@@ -174,6 +190,7 @@
                             this.checkoutAddress = parsed.address || '';
                             this.checkoutReference = parsed.reference || '';
                             this.gpsCoords = parsed.gpsCoords || '';
+                            this.selectedBase = parsed.selectedBase || 'santa_margarita';
                             this.saveUserData = true;
                         } catch (e) {
                             console.error("Error al cargar perfil guardado", e);
@@ -195,6 +212,10 @@
                     this.$watch('checkoutAddress', () => this.saveProfileToLocalStorage());
                     this.$watch('checkoutReference', () => this.saveProfileToLocalStorage());
                     this.$watch('gpsCoords', () => this.saveProfileToLocalStorage());
+                    this.$watch('selectedBase', (value) => {
+                        this.saveProfileToLocalStorage();
+                        this.recalculateDelivery();
+                    });
                 },
 
                 saveProfileToLocalStorage() {
@@ -205,7 +226,8 @@
                             deliveryType: this.checkoutDeliveryType,
                             address: this.checkoutAddress.trim(),
                             reference: this.checkoutReference.trim(),
-                            gpsCoords: this.gpsCoords
+                            gpsCoords: this.gpsCoords,
+                            selectedBase: this.selectedBase
                         };
                         localStorage.setItem('beeringo_saved_profile', JSON.stringify(profile));
                     } else {
@@ -249,6 +271,19 @@
                     return R * c;
                 },
 
+                recalculateDelivery() {
+                    if (this.gpsCoords) {
+                        const parts = this.gpsCoords.split(',');
+                        if (parts.length === 2) {
+                            const lat = parseFloat(parts[0]);
+                            const lng = parseFloat(parts[1]);
+                            if (!isNaN(lat) && !isNaN(lng)) {
+                                this.onMarkerMove(lat, lng);
+                            }
+                        }
+                    }
+                },
+
                 onMarkerMove(lat, lng) {
                     this.gpsCoords = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
                     
@@ -264,18 +299,18 @@
                 },
 
                 updateDeliveryCost(dist) {
-                    // Costos estimados según distancias acordadas por el cliente (Límite 9km)
+                    // Costos de envío provistos: <1km = S/3, 1-3km = S/6, 3-6km = S/9, 6-9km = S/13 (Límite 9km)
                     if (dist < 1.0) {
-                        this.deliveryCost = 3.0;   // Menor a 1km = S/ 3
+                        this.deliveryCost = 3.0;   
                         this.isOutOfRange = false;
                     } else if (dist >= 1.0 && dist <= 3.0) {
-                        this.deliveryCost = 6.0;   // 1 a 3km = S/ 6
+                        this.deliveryCost = 6.0;   
                         this.isOutOfRange = false;
                     } else if (dist > 3.0 && dist <= 6.0) {
-                        this.deliveryCost = 9.0;   // 3 a 6km = S/ 9
+                        this.deliveryCost = 9.0;   
                         this.isOutOfRange = false;
                     } else if (dist > 6.0 && dist <= 9.0) {
-                        this.deliveryCost = 13.0;  // 6 a 9km = S/ 13
+                        this.deliveryCost = 13.0;  
                         this.isOutOfRange = false;
                     } else {
                         this.deliveryCost = 0;
@@ -304,7 +339,6 @@
                             );
 
                             if (dist > 15.0 || accuracy > 1000) {
-                                // Coordenadas seguras del local de despacho base si el cálculo IP es erróneo
                                 const fallbackLat = this.restaurantCoords.lat;
                                 const fallbackLng = this.restaurantCoords.lng;
                                 if (this.map) {
@@ -315,7 +349,7 @@
                                 }
                                 this.onMarkerMove(fallbackLat, fallbackLng);
                                 this.reverseGeocode(fallbackLat, fallbackLng);
-                                this.triggerNotification("💻 Ubicación remota detectada. Te ubicamos cerca a Condominios Parque Santa Margarita para ajustar.");
+                                this.triggerNotification("💻 Ubicación remota detectada. Te ubicamos cerca a tu base seleccionada para ajustar.");
                             } else {
                                 if (this.map) {
                                     this.map.setView([lat, lng], 16);
@@ -438,7 +472,6 @@
                 async fetchMenu() {
                     this.isLoadingMenu = true;
                     try {
-                        // Dejamos en blanco de forma segura para activar el robusto Fallback local de BEERINGO
                         const sheetId = '';
                         const gid = '';
                         if (!sheetId || !gid) throw new Error("Fallback local de catálogo activo");
@@ -510,7 +543,6 @@
                     }
                     const amount = parseInt(qty) || 1;
 
-                    // El cliente solicita añadir acompañamientos seleccionables para la categoría "snacks"
                     if (product.category === 'snacks') {
                         for (let i = 0; i < amount; i++) {
                             const selectedCreams = this.detailCreamsSelections[i] || [];
@@ -535,7 +567,6 @@
                         }
                         this.triggerNotification(`🛒 Agregado: ${amount}x ${product.name} con salsas.`);
                     } else {
-                        // Flujo normal para cervezas y bebidas sin salsas adicionales
                         const existingItem = this.cart.find(item => item.id === product.id);
                         if (existingItem) {
                             existingItem.quantity += amount;
@@ -611,6 +642,14 @@
                     if (this.map) {
                         setTimeout(() => {
                             this.map.invalidateSize();
+                            // Re-centrar según base seleccionada si es que no hay GPS personalizado
+                            if (!this.gpsCoords) {
+                                const activeLoc = this.restaurantCoords;
+                                this.map.setView([activeLoc.lat, activeLoc.lng], 15);
+                                if (this.marker) {
+                                    this.marker.setLatLng([activeLoc.lat, activeLoc.lng]);
+                                }
+                            }
                         }, 200);
                         return;
                     }
@@ -655,7 +694,7 @@
                         }).addTo(this.map);
 
                         const pinIcon = L.divIcon({
-                            html: `<i class="fa-solid fa-location-dot text-bb-red text-3xl drop-shadow-md"></i>`,
+                            html: `<i class="fa-solid fa-location-dot text-[#1A1A1A] text-3xl drop-shadow-md"></i>`,
                             iconSize: [30, 30],
                             iconAnchor: [15, 30],
                             className: 'bg-transparent border-none'
@@ -724,7 +763,7 @@
                             return;
                         }
                         if (this.isOutOfRange) {
-                            this.errorMessage = "La ubicación elegida supera nuestro rango máximo de reparto (9 km).";
+                            this.errorMessage = "La ubicación elegida supera nuestro rango máximo de reparto (9 km) desde la base de despacho activa.";
                             return;
                         }
                     }
@@ -746,7 +785,6 @@
                         this.saveProfileToLocalStorage();
                     }
 
-                    // Teléfono de WhatsApp de BEERINGO (+51 969 299 888)
                     const businessPhone = "51969299888"; 
                     
                     let msg = `🍺 *NUEVO PEDIDO - BEERINGO* 🍺\n`;
@@ -754,16 +792,17 @@
                     msg += `👤 *Cliente:* ${this.checkoutName.trim()}\n`;
                     msg += `📞 *Celular:* ${this.checkoutPhone.trim()}\n`;
                     msg += `🛵 *Tipo de Entrega:* ${this.checkoutDeliveryType === 'delivery' ? 'Delivery' : 'Recojo en La casa'}\n`;
+                    msg += `🏬 *Base de Despacho:* ${this.bases[this.selectedBase].name}\n`;
                     
                     if (this.checkoutDeliveryType === 'delivery') {
-                        msg += `📍 *Dirección:* ${this.checkoutAddress.trim()}\n`;
+                        msg += `📍 *Dirección de Entrega:* ${this.checkoutAddress.trim()}\n`;
                         if (this.checkoutReference.trim()) {
                             msg += `🏢 *Referencia:* ${this.checkoutReference.trim()}\n`;
                         }
                         msg += `🗺️ *Ubicación GPS:* https://www.google.com/maps/search/?api=1&query=${this.gpsCoords.replace(/\s/g, '')}\n`;
-                        msg += `📏 *Distancia:* ${this.deliveryDistance.toFixed(2)} km\n`;
+                        msg += `📏 *Distancia de envío:* ${this.deliveryDistance.toFixed(2)} km\n`;
                     } else {
-                        msg += `🏢 *Punto de Recojo:* Condominios Parque Santa Margarita / Céntrika, Piura\n`;
+                        msg += `🏢 *Punto de Recojo Elegido:* ${this.bases[this.selectedBase].name}, Piura\n`;
                     }
 
                     if (this.checkoutNotes.trim()) {
@@ -815,15 +854,15 @@
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="bg-bb-cream text-bb-dark font-sans min-h-screen selection:bg-bb-yellow selection:text-bb-dark transition-all duration-150 relative pb-10" 
+<body class="bg-bb-cream text-bb-dark font-sans min-h-screen selection:bg-bb-dark selection:text-bb-yellow transition-all duration-150 relative pb-10" 
       x-data="bigBiteApp()"
       :class="isCartOpen || isDetailOpen ? 'overflow-hidden h-screen' : ''" 
       x-init="initData()">
 
-    <header class="bg-bb-dark text-white border-b border-bb-yellow/25 py-4 px-4 sticky top-0 z-40 shadow-xl">
+    <header class="bg-bb-yellow text-bb-dark border-b border-bb-dark/20 py-4 px-4 sticky top-0 z-40 shadow-md">
         <div class="max-w-6xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div id="logo-container" class="w-12 h-12 md:w-14 md:h-14 rounded-full bg-[#1A1A1A] overflow-hidden shadow-lg border-2 border-bb-yellow flex items-center justify-center p-0.5">
+                <div id="logo-container" class="w-12 h-12 md:w-14 md:h-14 rounded-full bg-bb-dark overflow-hidden shadow-md border-2 border-bb-dark flex items-center justify-center p-0.5">
                     <img :src="logoUrl" 
                          alt="Logo BEERINGO" 
                          class="w-full h-full object-cover rounded-full"
@@ -831,8 +870,8 @@
                     <span id="logo-fallback" class="text-bb-yellow font-brand text-2xl hidden font-black">B</span>
                 </div>
                 <div>
-                    <h1 class="font-brand text-2xl md:text-3xl tracking-wide text-bb-yellow leading-none font-black">BEERINGO</h1>
-                    <p class="text-[9px] md:text-xs font-bold tracking-widest text-white uppercase mt-0.5 opacity-90">Cerveza artesanal con alma de viringo</p>
+                    <h1 class="font-brand text-2xl md:text-3xl tracking-wide text-bb-dark leading-none font-black">BEERINGO</h1>
+                    <p class="text-[9px] md:text-xs font-bold tracking-widest text-bb-dark uppercase mt-0.5 opacity-90">Cerveza artesanal con alma de viringo</p>
                 </div>
             </div>
 
@@ -840,26 +879,26 @@
                 <a href="https://www.instagram.com/beeringoperu?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==" 
                    target="_blank" 
                    rel="noopener noreferrer"
-                   class="p-3 bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] text-white rounded-full hover:scale-105 transition-all flex items-center justify-center shadow-lg"
+                   class="p-3 bg-bb-dark text-bb-yellow rounded-full hover:scale-105 transition-all flex items-center justify-center shadow-lg"
                    title="Síguenos en Instagram">
                     <i class="fa-brands fa-instagram text-lg md:text-xl"></i>
                 </a>
 
                 <button @click="isCartOpen = true" 
-                        class="relative p-3 bg-bb-yellow text-bb-dark rounded-full hover:bg-white transition-all flex items-center justify-center shadow-md">
+                        class="relative p-3 bg-bb-dark text-bb-yellow rounded-full hover:bg-bb-cream hover:text-bb-dark transition-all flex items-center justify-center shadow-md">
                     <i class="fa-solid fa-beer-mug-empty text-lg md:text-xl"></i>
                     <span x-show="getCartItemsCount() > 0" 
-                          class="absolute -top-1 -right-1 bg-[#1A1A1A] text-bb-yellow font-extrabold text-[10px] h-5 w-5 rounded-full flex items-center justify-center animate-bounce shadow-md border border-bb-yellow"
+                          class="absolute -top-1 -right-1 bg-bb-yellow text-bb-dark font-extrabold text-[10px] h-5 w-5 rounded-full flex items-center justify-center animate-bounce shadow-md border border-bb-dark"
                           x-text="getCartItemsCount()"></span>
                 </button>
             </div>
         </div>
     </header>
 
-    <div class="bg-bb-yellow text-bb-dark py-2.5 px-4 text-xs font-bold shadow-md">
+    <div class="bg-bb-dark text-bb-yellow py-2.5 px-4 text-xs font-bold shadow-md">
         <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
             <div class="flex items-center gap-2">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-bb-dark text-bb-yellow">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-bb-yellow text-bb-dark">
                     <span :class="isOpen ? 'bg-emerald-500' : 'bg-rose-500'" class="w-1.5 h-1.5 rounded-full mr-1.5 animate-pulse"></span>
                     <span x-text="isOpen ? 'La Casa Abierta' : 'La Casa Cerrada'"></span>
                 </span>
@@ -868,8 +907,14 @@
                     <span>Atención todos los días: 11:00 AM - 11:00 PM</span>
                 </span>
             </div>
-            <div class="flex items-center gap-3 font-bold text-[11px]">
-                <span><i class="fa-solid fa-location-dot text-bb-dark mr-1"></i> Despacho desde Condominios Parque Santa Margarita, Piura</span>
+            
+            <!-- Selector dinámico de base de despacho -->
+            <div class="flex items-center gap-2 bg-bb-shadow/40 p-1 px-2.5 rounded-lg border border-bb-yellow/20 text-white text-[11px]">
+                <label class="font-semibold text-bb-yellow"><i class="fa-solid fa-store mr-1"></i> Despacho desde:</label>
+                <select x-model="selectedBase" class="bg-bb-dark text-bb-yellow font-bold border-none outline-none cursor-pointer focus:ring-0">
+                    <option value="santa_margarita" class="bg-bb-dark text-white">Parque Santa Margarita</option>
+                    <option value="centrika" class="bg-bb-dark text-white">Condominios Céntrika</option>
+                </select>
             </div>
         </div>
     </div>
@@ -932,6 +977,7 @@
                 </div>
             </aside>
 
+            <!-- Grid de Productos -->
             <div class="lg:col-span-3 space-y-10">
                 <template x-for="cat in categories" :key="cat.id">
                     <div x-show="shouldShowCategory(cat.id)" class="space-y-4" :id="`sec-${cat.id}`">
@@ -944,10 +990,11 @@
                                 <div @click="openProductDetail(product)"
                                      class="bg-white rounded-2xl border border-bb-yellow/10 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex items-stretch min-h-[140px] cursor-pointer hover:border-bb-yellow/40">
                                     
-                                    <div class="w-28 sm:w-36 flex-shrink-0 relative overflow-hidden bg-bb-cream">
+                                    <!-- Solución para el encuadre de la foto Red Ale e imagen de Pale Ale -->
+                                    <div class="w-28 sm:w-36 flex-shrink-0 relative overflow-hidden bg-bb-cream flex items-center justify-center">
                                         <img :src="product.image" 
                                              :alt="product.name" 
-                                             class="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                                             class="w-full h-full object-contain p-1 transition-transform duration-300 hover:scale-105"
                                              onerror="this.src='https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=500&q=80'">
                                     </div>
 
@@ -1002,10 +1049,11 @@
                 <i class="fa-solid fa-xmark text-lg"></i>
             </button>
 
-            <div class="h-44 sm:h-56 w-full relative overflow-hidden bg-bb-cream flex-shrink-0">
+            <!-- Ajuste del encuadre también en el detalle del producto -->
+            <div class="h-44 sm:h-56 w-full relative overflow-hidden bg-bb-cream flex items-center justify-center flex-shrink-0">
                 <img :src="selectedProductForDetail?.image" 
                      :alt="selectedProductForDetail?.name" 
-                     class="w-full h-full object-cover"
+                     class="max-w-full max-h-full object-contain p-2"
                      onerror="this.src='https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=500&q=80'">
                 
                 <div class="absolute bottom-4 left-4">
@@ -1019,7 +1067,7 @@
                 <h3 class="font-brand text-2xl text-bb-dark tracking-wide font-black" x-text="selectedProductForDetail?.name"></h3>
                 <p class="text-xs sm:text-sm text-bb-shadow/80 font-semibold leading-relaxed" x-text="selectedProductForDetail?.description"></p>
                 
-                <!-- Selector de cantidad para las cervezas o snacks -->
+                <!-- Selector de cantidad -->
                 <div class="flex items-center justify-between bg-bb-cream p-3 rounded-xl border border-bb-yellow/10">
                     <span class="text-xs font-bold text-bb-dark">¿Cuántas unidades deseas?</span>
                     <div class="flex items-center gap-3 bg-white border border-bb-yellow/20 rounded-xl px-2.5 py-1">
@@ -1029,7 +1077,7 @@
                     </div>
                 </div>
 
-                <!-- Personalización del producto (Salsas opcionales para snacks de maridaje) -->
+                <!-- Selección de Cremas / Salsas para porciones de snacks -->
                 <template x-if="selectedProductForDetail && selectedProductForDetail.category === 'snacks'">
                     <div class="space-y-4 border-t border-bb-yellow/10 pt-4">
                         <h4 class="font-bold text-xs uppercase tracking-wider text-bb-dark flex items-center gap-1.5">
@@ -1126,10 +1174,10 @@
                         <div x-show="cart.length > 0" class="divide-y divide-bb-gray">
                             <template x-for="item in cart" :key="item.id">
                                 <div class="py-4 flex items-center justify-between gap-4">
-                                    <div class="w-12 h-12 rounded-xl overflow-hidden bg-bb-cream border border-bb-yellow/10 flex-shrink-0">
+                                    <div class="w-12 h-12 rounded-xl overflow-hidden bg-bb-cream border border-bb-yellow/10 flex items-center justify-center flex-shrink-0">
                                         <img :src="item.image" 
                                              alt="" 
-                                             class="w-full h-full object-cover">
+                                             class="max-w-full max-h-full object-contain p-0.5">
                                     </div>
 
                                     <div class="flex-1">
@@ -1159,6 +1207,7 @@
                         </div>
                     </div>
 
+                    <!-- VISTA 2: FORMULARIO DE DESPACHO -->
                     <div x-show="currentStep === 'checkout'" class="space-y-4 sm:space-y-5">
                         
                         <div class="bg-bb-yellow/10 p-3 sm:p-4 rounded-xl border border-bb-yellow/25 flex items-center justify-between gap-3">
@@ -1186,6 +1235,24 @@
 
                         <div class="space-y-3">
                             <h3 class="font-brand text-xs sm:text-sm text-bb-dark font-black border-b border-bb-yellow pb-1 uppercase tracking-wider">Logística de Entrega</h3>
+                            
+                            <div>
+                                <label class="block text-[11px] font-bold text-bb-dark mb-1">Punto de Origen / Despacho *</label>
+                                <div class="grid grid-cols-2 gap-2 mb-2">
+                                    <button @click="selectedBase = 'santa_margarita'" 
+                                            :class="selectedBase === 'santa_margarita' ? 'bg-bb-dark text-bb-yellow font-black' : 'bg-bb-cream text-bb-shadow'"
+                                            class="py-2.5 px-1 rounded-xl text-[10px] sm:text-xs text-center transition font-semibold border border-bb-yellow/10 leading-tight">
+                                        📍 Parque Santa Margarita
+                                    </button>
+                                    <button @click="selectedBase = 'centrika'" 
+                                            :class="selectedBase === 'centrika' ? 'bg-bb-dark text-bb-yellow font-black' : 'bg-bb-cream text-bb-shadow'"
+                                            class="py-2.5 px-1 rounded-xl text-[10px] sm:text-xs text-center transition font-semibold border border-bb-yellow/10 leading-tight">
+                                        📍 Condominios Céntrika
+                                    </button>
+                                </div>
+                                <p class="text-[9px] text-gray-500 font-bold italic">Calculamos la distancia de reparto en tiempo real desde la base elegida.</p>
+                            </div>
+
                             <div>
                                 <label class="block text-[11px] font-bold text-bb-dark mb-1">Tipo de Entrega *</label>
                                 <div class="grid grid-cols-2 gap-2 mb-2">
@@ -1202,6 +1269,7 @@
                                 </div>
                             </div>
 
+                            <!-- Formulario de Dirección de Delivery -->
                             <div x-show="checkoutDeliveryType === 'delivery'" class="space-y-3">
                                 <div>
                                     <label class="block text-[11px] font-bold text-bb-dark mb-1">Dirección exacta en Piura *</label>
@@ -1222,7 +1290,7 @@
                                 </div>
 
                                 <div>
-                                    <button type="button"
+                                    <button type="button" 
                                             @click="getCurrentLocationGPS()"
                                             class="w-full py-2.5 px-4 bg-bb-yellow/10 hover:bg-bb-yellow/20 text-bb-dark border-2 border-bb-yellow border-dashed rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
                                         <i class="fa-solid fa-location-crosshairs text-sm"></i>
@@ -1236,6 +1304,7 @@
                                 <input type="text" x-model="checkoutReference" placeholder="Frente a parque, timbre, color de fachada" class="w-full text-xs py-2.5 px-3 rounded-xl border border-bb-yellow/20 focus:border-bb-dark outline-none bg-bb-cream font-semibold text-bb-dark">
                             </div>
 
+                            <!-- Mapa y cálculo de costos -->
                             <div x-show="checkoutDeliveryType === 'delivery'" class="space-y-1">
                                 <label class="block text-[11px] font-bold text-bb-dark">Arrastra el marcador sobre tu casa en el mapa *</label>
                                 <div id="map" class="h-40 sm:h-56 rounded-2xl border-2 border-bb-yellow/20 overflow-hidden shadow-inner mt-1"></div>
@@ -1447,3 +1516,5 @@
 
 </body>
 </html>
+```
+`eof`
