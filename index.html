@@ -81,7 +81,6 @@
                 isDetailOpen: false,
                 selectedProductForDetail: null,
                 modalQuantity: 1,
-                detailCreamsSelections: [ [] ], // Guarda la selección de salsas individual por cada unidad de snack pedida
 
                 // Formulario de Checkout
                 checkoutName: '',
@@ -96,7 +95,7 @@
                 checkoutPaymentMethod: 'yape', // 'yape' (Pago Móvil) o 'cash'
                 cashAmountToPay: '', // Monto ingresado con el que pagará
 
-                // Gestión dinámica de 2 Direcciones de Despacho (La Casa)
+                // Gestión de 2 Direcciones de Despacho (La Casa)
                 selectedBase: 'santa_margarita',
                 bases: {
                     santa_margarita: {
@@ -126,56 +125,40 @@
                 map: null,
                 marker: null,
 
-                // Logo dinámico inicial del cliente
+                // Logo dinámico inicial del cliente (image_a6bf8b.png)
                 logoUrl: 'https://i.ibb.co/vCzgG0Y3/photo-5053215447259482904-w.jpg',
 
-                // Categorías de catálogo solicitadas por el cliente
+                // Categorías profesionales para boutique de cervezas
                 categories: [
-                    { id: 'cervezas', name: '🍺 Cervezas' },
-                    { id: 'snacks', name: '🍟 Snacks' }
+                    { id: 'cervezas', name: 'Cervezas Artesanales' },
+                    { id: 'snacks', name: 'Maridaje y Snacks' }
                 ],
 
-                // Productos estrella cargados localmente (Fallback robusto garantizado)
+                // Catálogo de productos premium de BEERINGO
                 products: [
                     { 
                         id: 'pale-ale', 
                         name: 'Beeringo Pale Ale', 
-                        description: 'Refrescante, ligera, cítrica (5% de alcohol). El alma del viringo en cada sorbo.', 
+                        description: 'Cerveza artesanal de estilo Pale Ale. Refrescante, ligera y cítrica (5% de alcohol). El alma del viringo en cada sorbo.', 
                         category: 'cervezas', 
                         price: 12.0,
-                        image: 'https://i.ibb.co/NgW8z77t/PALE-ALE.png'
+                        image: 'https://i.ibb.co/NgW8z77t/PALE-ALE.png' // Imagen optimizada para object-contain
                     },
                     { 
                         id: 'red-ale', 
                         name: 'Beeringo Red Ale', 
-                        description: 'Maltosa, con matices acaramelados (6.5% de alcohol). Perfecta consistencia y aroma artesanal.', 
+                        description: 'Cerveza artesanal de estilo Red Ale. Maltosa, con matices acaramelados (6.5% de alcohol). Perfecta consistencia y aroma artesanal tradicional.', 
                         category: 'cervezas', 
                         price: 13.0,
-                        image: 'https://i.ibb.co/W41tzqGp/RED-ALE.png'
+                        image: 'https://i.ibb.co/W41tzqGp/RED-ALE.png' // Imagen corregida en encuadre
                     },
                     { 
                         id: 'papas-snacks', 
-                        name: 'Papas Artesanales Crujientes', 
-                        description: 'Papas nativas seleccionadas, doradas a la perfección con sal marina y finas hierbas. El maridaje ideal.', 
+                        name: 'Papas Nativas en Bolsa', 
+                        description: 'Laminadas finas, sumamente crujientes y seleccionadas minuciosamente de variedades nativas de la región. El maridaje ideal para conservar la frescura y acompañar tu cerveza.', 
                         category: 'snacks', 
                         price: 10.0,
-                        image: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=500&q=80'
-                    },
-                    { 
-                        id: 'crema-mayo', 
-                        name: 'Mayonesa de la Casa con Malta', 
-                        description: 'Mayonesa premium hecha artesanalmente con toques de ajo y emulsión de malta.', 
-                        category: 'cremas', 
-                        price: 0.0,
-                        image: 'https://images.unsplash.com/photo-1571115177098-24ec4209b50e?auto=format&fit=crop&w=500&q=80'
-                    },
-                    { 
-                        id: 'crema-aji', 
-                        name: 'Ají Pollero de la Casa', 
-                        description: 'Picante medio, elaborado con ají amarillo piurano y la receta secreta de La casa.', 
-                        category: 'cremas', 
-                        price: 0.0,
-                        image: 'https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?auto=format&fit=crop&w=500&q=80'
+                        image: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?auto=format&fit=crop&w=500&q=80' // Imagen de papas nativas gourmet en bolsa
                     }
                 ],
 
@@ -494,7 +477,6 @@
                 openProductDetail(product) {
                     this.selectedProductForDetail = product;
                     this.modalQuantity = 1; 
-                    this.detailCreamsSelections = [ [] ]; 
                     this.isDetailOpen = true;
                 },
 
@@ -506,34 +488,14 @@
                     return this.products.filter(p => p.category === categoryId).length;
                 },
 
-                getCremas() {
-                    return this.products.filter(p => p.category === 'cremas');
-                },
-
-                toggleCrema(itemIndex, cremaName) {
-                    if (!this.detailCreamsSelections[itemIndex]) {
-                        this.detailCreamsSelections[itemIndex] = [];
-                    }
-                    let selection = [...this.detailCreamsSelections[itemIndex]];
-                    const idx = selection.indexOf(cremaName);
-                    if (idx > -1) {
-                        selection.splice(idx, 1);
-                    } else {
-                        selection.push(cremaName);
-                    }
-                    this.detailCreamsSelections[itemIndex] = selection;
-                },
-
                 decreaseModalQty() {
                     if (this.modalQuantity > 1) {
                         this.modalQuantity--;
-                        this.detailCreamsSelections.pop();
                     }
                 },
 
                 increaseModalQty() {
                     this.modalQuantity++;
-                    this.detailCreamsSelections.push([]);
                 },
 
                 addToCartWithQty(product, qty) {
@@ -543,47 +505,21 @@
                     }
                     const amount = parseInt(qty) || 1;
 
-                    if (product.category === 'snacks') {
-                        for (let i = 0; i < amount; i++) {
-                            const selectedCreams = this.detailCreamsSelections[i] || [];
-                            const creamsKey = [...selectedCreams].sort().join(',');
-                            const cartItemId = `${product.id}-${creamsKey}`;
-
-                            const existingItem = this.cart.find(item => item.id === cartItemId);
-                            if (existingItem) {
-                                existingItem.quantity += 1;
-                            } else {
-                                this.cart.push({
-                                    id: cartItemId,
-                                    productId: product.id,
-                                    name: product.name,
-                                    price: product.price,
-                                    image: product.image,
-                                    category: product.category,
-                                    quantity: 1,
-                                    creams: [...selectedCreams]
-                                });
-                            }
-                        }
-                        this.triggerNotification(`🛒 Agregado: ${amount}x ${product.name} con salsas.`);
+                    const existingItem = this.cart.find(item => item.productId === product.id);
+                    if (existingItem) {
+                        existingItem.quantity += amount;
                     } else {
-                        const existingItem = this.cart.find(item => item.id === product.id);
-                        if (existingItem) {
-                            existingItem.quantity += amount;
-                        } else {
-                            this.cart.push({
-                                id: product.id,
-                                productId: product.id,
-                                name: product.name,
-                                price: product.price,
-                                image: product.image,
-                                category: product.category,
-                                quantity: amount,
-                                creams: []
-                            });
-                        }
-                        this.triggerNotification(`🛒 Agregado: ${amount}x ${product.name}`);
+                        this.cart.push({
+                            id: product.id,
+                            productId: product.id,
+                            name: product.name,
+                            price: product.price,
+                            image: product.image,
+                            category: product.category,
+                            quantity: amount
+                        });
                     }
+                    this.triggerNotification(`🛒 Agregado: ${amount}x ${product.name}`);
                 },
 
                 increaseQty(item) {
@@ -642,7 +578,6 @@
                     if (this.map) {
                         setTimeout(() => {
                             this.map.invalidateSize();
-                            // Re-centrar según base seleccionada si es que no hay GPS personalizado
                             if (!this.gpsCoords) {
                                 const activeLoc = this.restaurantCoords;
                                 this.map.setView([activeLoc.lat, activeLoc.lng], 15);
@@ -822,11 +757,7 @@
                     msg += `📋 *PRODUCTOS PEDIDOS:* \n`;
                     
                     this.cart.forEach(item => {
-                        let creamsStr = '';
-                        if (item.creams && item.creams.length > 0) {
-                            creamsStr = ` [Salsas: ${item.creams.join(', ')}]`;
-                        }
-                        msg += `• ${item.quantity}x _${item.name}_${creamsStr} | S/ ${(item.price * item.quantity).toFixed(2)}\n`;
+                        msg += `• ${item.quantity}x _${item.name}_ | S/ ${(item.price * item.quantity).toFixed(2)}\n`;
                     });
 
                     const subtotal = this.getCartTotal();
@@ -859,6 +790,7 @@
       :class="isCartOpen || isDetailOpen ? 'overflow-hidden h-screen' : ''" 
       x-init="initData()">
 
+    <!-- HEADER CON COLOR AMARILLO MOSTAZA DE FONDO Y TEXTO NEGRO -->
     <header class="bg-bb-yellow text-bb-dark border-b border-bb-dark/20 py-4 px-4 sticky top-0 z-40 shadow-md">
         <div class="max-w-6xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -895,6 +827,7 @@
         </div>
     </header>
 
+    <!-- ESTADO DE ATENCIÓN Y SELECCIÓN DE BASE DE DESPACHO -->
     <div class="bg-bb-dark text-bb-yellow py-2.5 px-4 text-xs font-bold shadow-md">
         <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
             <div class="flex items-center gap-2">
@@ -908,7 +841,7 @@
                 </span>
             </div>
             
-            <!-- Selector dinámico de base de despacho -->
+            <!-- Selector dinámico de base de despacho (Soporta las 2 direcciones) -->
             <div class="flex items-center gap-2 bg-bb-shadow/40 p-1 px-2.5 rounded-lg border border-bb-yellow/20 text-white text-[11px]">
                 <label class="font-semibold text-bb-yellow"><i class="fa-solid fa-store mr-1"></i> Despacho desde:</label>
                 <select x-model="selectedBase" class="bg-bb-dark text-bb-yellow font-bold border-none outline-none cursor-pointer focus:ring-0">
@@ -919,8 +852,10 @@
         </div>
     </div>
 
+    <!-- HERO DE BIENVENIDA -->
     <div class="max-w-6xl mx-auto px-4 mt-6">
         <div class="relative bg-bb-dark text-white rounded-3xl p-6 md:p-10 border border-bb-yellow/20 overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl">
+            <!-- Capa de brillo sutil en el fondo -->
             <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-bb-yellow/10 via-transparent to-transparent"></div>
             
             <div class="space-y-4 text-center md:text-left z-10 max-w-xl">
@@ -944,6 +879,7 @@
                 </div>
             </div>
             
+            <!-- Imagen de cerveza artesanal -->
             <div class="w-44 h-44 md:w-56 md:h-56 rounded-full overflow-hidden shadow-2xl border-4 border-bb-yellow rotate-3 hover:rotate-0 transition-all duration-500 bg-bb-shadow flex-shrink-0">
                 <img src="https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=500&q=80" 
                      alt="Craft Beer Pour" 
@@ -952,6 +888,7 @@
         </div>
     </div>
 
+    <!-- CONTENIDO DEL CATÁLOGO ARTESANAL -->
     <main class="max-w-6xl mx-auto px-4 py-8 md:py-12">
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
             
@@ -963,7 +900,7 @@
                             class="px-5 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap tracking-wide transition-all duration-200 text-left w-auto lg:w-full flex items-center justify-between gap-3"
                             :class="selectedCategory === 'todas' ? 'bg-bb-dark text-bb-yellow shadow-md' : 'bg-white hover:bg-bb-yellow/5 text-bb-dark border border-bb-yellow/10'">
                         <span>📋 Todo el Menú</span>
-                        <span class="hidden lg:inline text-[10px] bg-bb-dark/5 text-bb-dark px-2 py-0.5 rounded-full font-black" x-text="products.filter(p => p.category !== 'cremas').length"></span>
+                        <span class="hidden lg:inline text-[10px] bg-bb-dark/5 text-bb-dark px-2 py-0.5 rounded-full font-black" x-text="products.length"></span>
                     </button>
                     
                     <template x-for="cat in categories" :key="cat.id">
@@ -990,7 +927,6 @@
                                 <div @click="openProductDetail(product)"
                                      class="bg-white rounded-2xl border border-bb-yellow/10 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex items-stretch min-h-[140px] cursor-pointer hover:border-bb-yellow/40">
                                     
-                                    <!-- Solución para el encuadre de la foto Red Ale e imagen de Pale Ale -->
                                     <div class="w-28 sm:w-36 flex-shrink-0 relative overflow-hidden bg-bb-cream flex items-center justify-center">
                                         <img :src="product.image" 
                                              :alt="product.name" 
@@ -1023,6 +959,7 @@
         </div>
     </main>
 
+    <!-- MODAL DE DETALLE DE PRODUCTO -->
     <div x-show="isDetailOpen" 
          class="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 sm:p-6" 
          style="display: none;"
@@ -1049,7 +986,6 @@
                 <i class="fa-solid fa-xmark text-lg"></i>
             </button>
 
-            <!-- Ajuste del encuadre también en el detalle del producto -->
             <div class="h-44 sm:h-56 w-full relative overflow-hidden bg-bb-cream flex items-center justify-center flex-shrink-0">
                 <img :src="selectedProductForDetail?.image" 
                      :alt="selectedProductForDetail?.name" 
@@ -1077,32 +1013,6 @@
                     </div>
                 </div>
 
-                <!-- Selección de Cremas / Salsas para porciones de snacks -->
-                <template x-if="selectedProductForDetail && selectedProductForDetail.category === 'snacks'">
-                    <div class="space-y-4 border-t border-bb-yellow/10 pt-4">
-                        <h4 class="font-bold text-xs uppercase tracking-wider text-bb-dark flex items-center gap-1.5">
-                            <i class="fa-solid fa-pepper-hot text-bb-yellow"></i> Selecciona cremas para acompañar tus snacks:
-                        </h4>
-                        
-                        <template x-for="(selection, index) in detailCreamsSelections" :key="index">
-                            <div class="bg-bb-cream p-3 rounded-xl border border-bb-yellow/10 space-y-2">
-                                <p class="text-xs font-black text-bb-dark" x-text="`Para tu porción #${index + 1}:`"></p>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <template x-for="crema in getCremas()" :key="crema.id">
-                                        <label class="flex items-center gap-2 bg-white p-2 rounded-lg border border-bb-yellow/5 cursor-pointer select-none">
-                                            <input type="checkbox" 
-                                                   :checked="selection.includes(crema.name)" 
-                                                   @change="toggleCrema(index, crema.name)"
-                                                   class="rounded text-bb-yellow focus:ring-bb-yellow w-4 h-4">
-                                            <span class="text-xs font-semibold text-bb-dark" x-text="crema.name"></span>
-                                        </label>
-                                    </template>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </template>
-
                 <div class="flex items-center justify-between pt-4 border-t border-bb-yellow/10">
                     <div>
                         <span class="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Precio Unitario</span>
@@ -1119,6 +1029,7 @@
         </div>
     </div>
 
+    <!-- PANEL LATERAL DE CARRITO Y CHECKOUT -->
     <div x-show="isCartOpen" class="fixed inset-0 z-50 overflow-hidden" style="display: none;">
         <div class="absolute inset-0 bg-black/70 backdrop-blur-xs transition-opacity" @click="isCartOpen = false"></div>
 
@@ -1182,14 +1093,10 @@
 
                                     <div class="flex-1">
                                         <h4 class="font-bold text-xs md:text-sm text-bb-dark" x-text="item.name"></h4>
-                                        <template x-if="item.creams && item.creams.length > 0">
-                                            <p class="text-[10px] text-bb-yellow font-bold leading-tight mt-1">
-                                                Salsas: <span class="text-bb-shadow/85" x-text="item.creams.join(', ')"></span>
-                                            </p>
-                                        </template>
                                         <p class="text-[11px] font-bold text-bb-shadow/70 mt-0.5" x-text="`S/ ${item.price.toFixed(2)} c/u`"></p>
                                     </div>
 
+                                    <!-- Ajustes de cantidad en carrito -->
                                     <div class="flex items-center gap-2 border border-bb-yellow/20 rounded-xl px-2 py-1 bg-bb-cream">
                                         <button @click="decreaseQty(item)" class="text-bb-dark hover:text-bb-yellow px-1.5 py-0.5 text-xs font-black"><i class="fa-solid fa-minus"></i></button>
                                         <span class="text-xs font-bold text-bb-dark px-1" x-text="item.quantity"></span>
@@ -1349,7 +1256,7 @@
                                         :class="checkoutPaymentMethod === 'yape' ? 'bg-bb-dark text-bb-yellow' : 'bg-transparent text-bb-dark/70 hover:text-bb-dark'"
                                         class="py-2.5 px-4 rounded-full text-xs font-black transition-all duration-200 flex items-center justify-center gap-2">
                                     <span x-show="checkoutPaymentMethod === 'yape'" class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                                    <span>📱 Yape / Plin</span>
+                                    <span>📱 Pago Móvil</span>
                                 </button>
                                 
                                 <button type="button" 
@@ -1428,6 +1335,7 @@
                     </div>
                 </div>
 
+                <!-- Footer del panel lateral -->
                 <div x-show="cart.length > 0" class="p-3.5 sm:p-5 border-t border-bb-gray bg-white space-y-2 sm:space-y-4 flex-shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
                     
                     <div class="space-y-1 sm:space-y-1.5 text-xs font-bold text-bb-shadow/90" :class="currentStep === 'checkout' ? 'hidden sm:block' : ''">
@@ -1482,7 +1390,7 @@
         </div>
     </div>
 
-    <!-- Notificación Flotante -->
+    <!-- Notificación Flotante de sistema -->
     <div x-show="floatingNotification" 
          class="fixed bottom-4 left-4 right-4 md:left-auto md:w-80 bg-bb-dark text-white p-4 rounded-xl shadow-2xl z-50 flex items-center justify-between border border-bb-yellow/20"
          style="display: none;"
@@ -1516,5 +1424,3 @@
 
 </body>
 </html>
-```
-`eof`
